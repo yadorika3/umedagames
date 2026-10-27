@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ロール・ランナー 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --cream:#F7EEDD;
+    --tile:#BFE0DA;
+    --ink:#2B2420;
+    --navy:#243452;
+    --rose:#C24358;
+    --gold:#CC9A3C;
+    --white:#FFFDF8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--tile);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    color:var(--ink);
+    touch-action:none;
+    overscroll-behavior:none;
+    position:fixed;
+    width:100%;
+  }
+  #app{
+    position:relative;
+    width:100vw; height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    background:
+      repeating-linear-gradient(180deg, var(--tile) 0 38px, #AFD6CF 38px 40px);
+    overscroll-behavior:none;
+    touch-action:none;
+  }
+  #gameWrap{
+    position:relative;
+    width:100%; height:100%;
+    max-width:560px;
+    background:linear-gradient(180deg,#F7EEDD 0%, #EFE1C4 60%, #E7D6B3 100%);
+    overflow:hidden;
+    box-shadow:0 0 40px rgba(0,0,0,0.35);
+    overscroll-behavior:none;
+    touch-action:none;
+  }
+  #threeContainer{
+    position:absolute; inset:0;
+    touch-action:none;
+    overscroll-behavior:none;
+    z-index:1;
+  }
+  #threeContainer canvas{
+    display:block; width:100%; height:100%;
+    touch-action:none;
+  }
+  #crackOverlay{
+    position:absolute; inset:0; width:100%; height:100%;
+    z-index:6; pointer-events:none;
+    opacity:0;
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.5));
+  }
+  #crackOverlay.show{
+    animation: crackFlash 0.9s ease-out forwards;
+  }
+  @keyframes crackFlash{
+    0%{ opacity:0; transform:scale(0.7); }
+    8%{ opacity:1; transform:scale(1.04); }
+    18%{ transform:scale(1); }
+    75%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+  #trailCanvas{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    pointer-events:none;
+    z-index:2;
+  }
+
+  /* HUD */
+  #hud{
+    position:absolute; top:0; left:0; right:0;
+    padding:14px 14px 0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    pointer-events:none;
+    z-index:5;
+  }
+  .ticket{
+    background:var(--white);
+    border-radius:4px;
+    padding:8px 14px 6px;
+    box-shadow:0 3px 0 rgba(0,0,0,0.12);
+    position:relative;
+  }
+  .ticket::after{
+    content:'';
+    position:absolute; left:0; right:0; bottom:-6px;
+    height:6px;
+    background-image: radial-gradient(circle at 6px 0, transparent 5px, var(--cream) 5.5px);
+    background-size: 12px 6px;
+    background-repeat:repeat-x;
+  }
+  #scoreLabel{ font-size:10px; letter-spacing:2px; color:#96897a; font-weight:700;}
+  #scoreVal{
+    font-family:'Fredoka', sans-serif; font-weight:700;
+    font-size:26px; color:var(--rose); line-height:1;
+  }
+  #scoreVal span{ font-size:13px; color:var(--ink); margin-left:2px;}
+  #timerWrap{ text-align:right; }
+  #timerLabel{ font-size:10px; letter-spacing:2px; color:#96897a; font-weight:700; text-align:right;}
+  #timerVal{
+    font-family:'Fredoka', sans-serif; font-weight:700; font-size:26px;
+    color:var(--navy); line-height:1; text-align:right;
+  }
+
+  /* Controls */
+  #pullHint{
+    position:absolute; left:0; right:0; bottom:34px;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    font-size:12px; font-weight:700; color:#6b5f4f; text-align:center;
+    letter-spacing:1px; line-height:1.5;
+    pointer-events:none;
+    z-index:4;
+    animation: pullPulse 1.8s ease-in-out infinite;
+  }
+  #pullHint .big-hint{
+    background:rgba(255,253,248,0.85);
+    padding:4px 14px; border-radius:20px;
+  }
+  #pullHintIcon{
+    font-size:30px;
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,0.15));
+  }
+  @keyframes pullPulse{
+    0%,100%{ transform:translateY(0); opacity:0.85; }
+    50%{ transform:translateY(6px); opacity:1; }
+  }
+  #pullHint.faded{ opacity:0.35; animation:none; }
+
+  #trickLabel{
+    position:absolute; left:0; right:0; top:34%;
+    text-align:center; pointer-events:none; z-index:5;
+    font-size:34px; font-weight:900; letter-spacing:2px;
+    color:#fff;
+    text-shadow: 0 0 10px rgba(255,80,180,0.8), 0 0 22px rgba(120,140,255,0.7), 0 3px 0 rgba(0,0,0,0.25);
+    opacity:0; transform:scale(0.6);
+    transition:none;
+  }
+  #trickLabel.show{
+    animation: trickPop 0.7s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes trickPop{
+    0%{ opacity:0; transform:scale(0.5) rotate(-8deg); }
+    25%{ opacity:1; transform:scale(1.15) rotate(3deg); }
+    45%{ opacity:1; transform:scale(1) rotate(0deg); }
+    80%{ opacity:1; }
+    100%{ opacity:0; transform:scale(1.05) rotate(0deg); }
+  }
+
+  #camDebugToggle{ display:none; }
+  #camDebugPanel{
+    position:absolute; left:10px; right:10px; bottom:150px; z-index:20;
+    background:rgba(20,20,20,0.82); border-radius:14px; padding:10px 14px;
+    display:none; font-family:monospace;
+    touch-action:auto;
+  }
+  #camDebugPanel.open{ display:block; }
+  #camDebugPanel .camRow{
+    display:flex; align-items:center; gap:8px; margin:4px 0;
+  }
+  #camDebugPanel label{ color:#fff; font-size:11px; width:62px; flex-shrink:0; }
+  #camDebugPanel input[type=range]{ flex:1; touch-action:auto; }
+  #camDebugPanel span{ color:#7CFFB2; font-size:11px; width:40px; text-align:right; flex-shrink:0; }
+  #testReloadBtn{
+    display:block; width:100%; margin:8px 0 4px; padding:9px;
+    background:#FF5FA8; color:#fff; border:none; border-radius:8px;
+    font-size:13px; font-weight:700;
+  }
+  #camDebugReadout{
+    color:#FFD35C; font-size:11px; margin-top:6px; white-space:pre-wrap; line-height:1.5;
+    user-select:all;
+  }
+
+  /* Overlays */
+  .overlay{
+    position:absolute; inset:0;
+    background:rgba(36,52,82,0.88);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#fff; text-align:center; padding:30px;
+    z-index:10;
+  }
+  .hidden{ display:none !important; }
+  .overlay h1{
+    font-family:'Fredoka', sans-serif; font-weight:700;
+    font-size:34px; margin:0 0 6px; color:var(--gold);
+    letter-spacing:1px;
+  }
+  .overlay h2{
+    font-family:'Fredoka', sans-serif; font-weight:700;
+    font-size:26px; margin:0 0 16px; color:#fff;
+  }
+  .overlay p{ font-size:14px; line-height:1.7; max-width:340px; margin:6px 0 18px; color:#e7e2d6;}
+  .overlay .big{
+    font-family:'Fredoka', sans-serif; font-weight:700; font-size:44px; color:var(--rose);
+    margin:4px 0 4px;
+  }
+  .overlay .small{ font-size:12px; color:#cfc7b6; margin-bottom:20px; letter-spacing:1px;}
+  .btn{
+    font-family:'Fredoka', sans-serif; font-weight:700;
+    background:var(--rose); color:#fff; border:none;
+    padding:14px 34px; border-radius:30px; font-size:17px;
+    box-shadow:0 5px 0 #7c2233;
+    cursor:pointer; letter-spacing:1px;
+  }
+  .btn:active{ transform:translateY(4px); box-shadow:0 1px 0 #7c2233;}
+  .icon-row{ display:flex; gap:18px; margin-bottom:6px; }
+  .icon-item{ display:flex; flex-direction:column; align-items:center; gap:6px; font-size:11px; color:#e7e2d6; width:110px;}
+  .icon-circle{
+    width:52px; height:52px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px;
+    background:rgba(255,255,255,0.1);
+    border:2px solid rgba(255,255,255,0.25);
+  }
+  #loadingMsg{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#8a7a5f; font-size:13px; letter-spacing:1px; z-index:2;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="gameWrap">
+    <div id="loadingMsg">読み込み中…</div>
+    <div id="threeContainer"></div>
+    <svg id="crackOverlay" viewBox="0 0 400 800" preserveAspectRatio="none">
+      <g stroke="#fff" stroke-width="2" fill="none" opacity="0.92" stroke-linecap="round">
+        <path d="M200 380 L160 300 L120 250 L90 180 L100 90"/>
+        <path d="M200 380 L240 310 L280 260 L310 190 L295 100"/>
+        <path d="M200 380 L165 420 L130 470 L150 560 L110 650"/>
+        <path d="M200 380 L235 430 L270 480 L250 570 L290 660"/>
+        <path d="M200 380 L120 250 L60 240 L10 260"/>
+        <path d="M200 380 L280 260 L340 250 L390 270"/>
+        <path d="M200 380 L165 420 L90 430 L30 410"/>
+        <path d="M200 380 L235 430 L310 445 L370 420"/>
+        <path d="M160 300 L130 260 L140 220"/>
+        <path d="M240 310 L270 270 L260 225"/>
+        <path d="M165 420 L110 440 L100 480"/>
+        <path d="M235 430 L290 450 L300 490"/>
+        <circle cx="200" cy="380" r="26" fill="#fff" opacity="0.5"/>
+      </g>
+    </svg>
+    <canvas id="trailCanvas"></canvas>
+
+    <div id="hud">
+      <div class="ticket">
+        <div id="scoreLabel">紙の長さ</div>
+        <div id="scoreVal">0.0<span>m</span></div>
+      </div>
+      <div class="ticket" id="timerWrap">
+        <div id="timerLabel">残り時間</div>
+        <div id="timerVal">45</div>
+      </div>
+    </div>
+
+    <div id="pullHint">
+      <div id="pullHintIcon">🫳</div>
+      <div class="big-hint">リズムよくなぞる<br>だんだん速く！</div>
+    </div>
+
+    <button id="camDebugToggle">📷</button>
+    <div id="camDebugPanel">
+      <div class="camRow"><label>Offset X</label><input type="range" id="camOX" min="-5" max="25" step="0.1"><span id="camOXval"></span></div>
+      <div class="camRow"><label>Offset Y</label><input type="range" id="camOY" min="-5" max="25" step="0.1"><span id="camOYval"></span></div>
+      <div class="camRow"><label>Offset Z</label><input type="range" id="camOZ" min="-20" max="20" step="0.1"><span id="camOZval"></span></div>
+      <div class="camRow"><label>Target Y</label><input type="range" id="camTY" min="-3" max="10" step="0.1"><span id="camTYval"></span></div>
+      <div class="camRow"><label>Target Z</label><input type="range" id="camTZ" min="-10" max="10" step="0.1"><span id="camTZval"></span></div>
+      <div class="camRow"><label>Zoom</label><input type="range" id="camZoom" min="0.4" max="2.5" step="0.02"><span id="camZoomval"></span></div>
+      <div class="camRow"><label>Char X</label><input type="range" id="charX" min="-6" max="6" step="0.1"><span id="charXval"></span></div>
+      <div class="camRow"><label>Char Y</label><input type="range" id="charY" min="-4" max="4" step="0.1"><span id="charYval"></span></div>
+      <div class="camRow"><label>Char Z</label><input type="range" id="charZ" min="-4" max="4" step="0.1"><span id="charZval"></span></div>
+      <div class="camRow"><label>Holder X</label><input type="range" id="holderX" min="-3" max="3" step="0.1"><span id="holderXval"></span></div>
+      <div class="camRow"><label>Holder Y</label><input type="range" id="holderY" min="-1" max="4" step="0.1"><span id="holderYval"></span></div>
+      <div class="camRow"><label>Jump Dur</label><input type="range" id="jumpDur" min="0.3" max="2" step="0.05"><span id="jumpDurval"></span></div>
+      <div class="camRow"><label>Jump Arc</label><input type="range" id="jumpArc" min="0" max="5" step="0.1"><span id="jumpArcval"></span></div>
+      <button id="testReloadBtn">▶ ホルダーへジャンプをテスト</button>
+      <div id="camDebugReadout"></div>
+    </div>
+
+
+    <div class="overlay" id="startOverlay">
+      <h1>ロール・ランナー 3D</h1>
+      <p>紳士はトイレットペーパーの上をただ走り続けている。<br>画面を指でなぞって、リズムよく紙を引き出そう。間隔をだんだん縮めるほど紙が速く出る。</p>
+      <div class="icon-row">
+        <div class="icon-item"><div class="icon-circle">🫳</div>リズムよくなぞる<br>だんだん速く縮める</div>
+        <div class="icon-item"><div class="icon-circle">🌊</div>タイミングがズレると波<br>大きく外すとこける</div>
+      </div>
+      <p style="margin-top:2px;">紳士は波が来ると自動でジャンプする。制限時間内にできるだけ長く紙を引き出そう。</p>
+      <div class="small" id="highScoreStart">ハイスコア: --</div>
+      <button class="btn" id="startBtn">スタート</button>
+    </div>
+
+    <div class="overlay hidden" id="endOverlay">
+      <h2 id="endTitle">タイムアップ！</h2>
+      <div class="small">引き出した紙の長さ</div>
+      <div class="big" id="finalScore">0.0m</div>
+      <div class="small" id="newRecord"></div>
+      <button class="btn" id="retryBtn">もう一度</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const container = document.getElementById('threeContainer');
+  const wrap = document.getElementById('gameWrap');
+  let W=0,H=0;
+
+  // ---------- Storage (high score) ----------
+  let highScore = 0;
+  async function loadHighScore(){
+    try{
+      const r = await window.storage.get('toiletpaper-runner-highscore-3d');
+      if(r && r.value){ highScore = parseFloat(r.value)||0; }
+    }catch(e){}
+    document.getElementById('highScoreStart').textContent = 'ハイスコア: ' + highScore.toFixed(1) + 'm';
+  }
+  async function saveHighScore(v){
+    try{ await window.storage.set('toiletpaper-runner-highscore-3d', String(v)); }catch(e){}
+  }
+  loadHighScore();
+
+  // ---------- Game constants (world units) ----------
+  const ROLL_X = 0;
+  const WALL_X_G = ROLL_X-2.0; // wall position, kept close to the roll so the holder bracket can reach it
+  const CHAR_X = 9;
+  const FAR_X = 42;
+  const GAME_TIME = 45;
+  let MAX_SPEED = 5.2;
+  const FRICTION = 1.15; // speed decays fairly fast between swipes so each pull reads as a rhythmic pulse
+  const JUMP_V = 6.6;
+  const GRAVITY = 21;
+
+  // rhythm timing: each swipe is judged against how long you took since the last one
+  const START_INTERVAL = 900;  // ms, comfortable starting pace
+  const MIN_INTERVAL = 260;    // ms, fastest achievable pace
+  const MAX_INTERVAL = 1500;   // ms
+  const GOOD_LOW = 0.75, GOOD_HIGH = 1.3;   // on-beat window (ratio of actual/expected interval)
+  const WAVE_LOW = 0.45, WAVE_HIGH = 2.4;   // survivable-but-off window; outside this = game over
+
+  const MAX_AMPLITUDE = 1.05;  // ripple peak height
+  const RIPPLE_LIFE = 0.62;    // seconds a ripple lasts
+  const RIPPLE_RADIUS = 3.0;   // world units the ripple spreads around the runner
+
+  const SLOPE_RATE = 0.34;     // how steeply the paper drops away from the runner, per world unit — steep enough that the ground runs off the bottom of frame
+  const SLIDE_RATE = 0.9;      // world units/sec the runner slides toward the camera when paper isn't being fed
+  const SLIDE_FAIL = 3.2;      // sliding this far downhill without a pull = falls off entirely
+  const ROLL_MOUNT_Y = 6.0;    // height the holder is mounted at — well above the runner's head
+  function slopeHeightAt(worldX){ return -(worldX-CHAR_X)*SLOPE_RATE; }
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  // ---------- State ----------
+  let state = 'ready'; // ready | playing | ending | over
+  let paperSpeed = 0;
+  let paperOffset = 0;
+  let score = 0;
+  let timeLeft = GAME_TIME;
+  let charY = 0, charVY = 0, jumping = false;
+  let shakeT = 0;
+  let legPhase = 0;
+  let lastTS = null;
+
+  let expectedInterval = START_INTERVAL;
+  let lastSwipeAt = null;
+  let activeRipples = []; // {t0, severity}
+  let tripT = 0;
+  let strideInput = 0; // -1..1, live horizontal finger position drives leg stride
+  let dragging = false;
+  let slideDist = 0; // how far downhill (toward the camera) the runner has slid from not feeding him paper
+  let forwardProgress = 0; // how far he's run up the paper when going fast
+  let rollScore = 0; // resets each time the roll is replaced — drives roll depletion independent of the displayed cumulative score
+  let paperMatRef, rollSideMatRef, ringMatRef;
+  let reloading = false, reloadPhase = '', reloadT = 0, reloadDidSwap = false;
+  const PAPER_THEMES = [
+    { paper:0xffffff, roll:0xF3E9D2 },
+    { paper:0xFF8FC4, roll:0xE85FA0 },
+    { paper:0x6FE0FF, roll:0x2FB8E0 },
+    { paper:0x8CFF6B, roll:0x4FD62E },
+    { paper:0xFFD23F, roll:0xF5A200 },
+    { paper:0xB98CFF, roll:0x8A4FE0 },
+  ];
+  let themeIndex = 0;
+
+  function reset(){
+    paperSpeed=0; paperOffset=0; score=0; timeLeft=GAME_TIME;
+    charY=0; charVY=0; jumping=false; shakeT=0; legPhase=0;
+    expectedInterval=START_INTERVAL; lastSwipeAt=null;
+    activeRipples=[]; fxPulses=[]; sparkles=[]; tripT=0;
+    awaitingSwipe=false; strideInput=0; dragging=false; slideDist=0;
+    forwardProgress=0;
+    bgHue=0; trickActive=false; trickT=0; nextTrickAt=0;
+    rollScore=0; reloading=false; reloadPhase=''; reloadT=0; reloadDidSwap=false; themeIndex=0; MAX_SPEED=5.2;
+    const crackEl = document.getElementById('crackOverlay');
+    if(crackEl) crackEl.classList.remove('show');
+    if(paperMatRef) paperMatRef.color.setHex(PAPER_THEMES[0].paper);
+    if(rollSideMatRef) rollSideMatRef.color.setHex(PAPER_THEMES[0].roll);
+    if(ringMatRef) ringMatRef.color.setHex(0xffffff);
+    if(paperMesh) paperMesh.visible = true;
+    if(charGroup){
+      charGroup.position.set(CHAR_X+charDebugX, charDebugY, charDebugZ);
+      charGroup.rotation.set(0, -Math.PI/2, 0);
+    }
+    hintFaded=false; pullHint.classList.remove('faded');
+    if(typeof drawRingCanvas==='function'){ lastLayerCount=-1; drawRingCanvas(TOTAL_LAYERS); }
+    updateHUD();
+  }
+
+  // ================= THREE.JS SETUP =================
+  let renderer, scene, camera;
+  let rollGroup, rollInner, rollTubeMesh;
+  let bgMat, bgTex, bgHue = 0;
+  let trickActive=false, trickType=null, trickT=0, trickDuration=0, nextTrickAt=0;
+  let paperMesh, paperGeo, paperBaseX;
+  let charGroup, legL, legR, armL, armR, shadowMesh;
+  let paperTexture;
+
+  function makeTileTexture(opts){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = opts.base;
+    g.fillRect(0,0,256,256);
+    g.strokeStyle = opts.grout;
+    g.lineWidth = opts.groutW;
+    const n = opts.cells;
+    const step = 256/n;
+    for(let i=0;i<=n;i++){
+      g.beginPath(); g.moveTo(i*step,0); g.lineTo(i*step,256); g.stroke();
+      g.beginPath(); g.moveTo(0,i*step); g.lineTo(256,i*step); g.stroke();
+    }
+    // subtle per-tile shading for a bit of realism
+    g.globalAlpha = 0.05;
+    for(let i=0;i<n;i++) for(let j=0;j<n;j++){
+      if((i+j)%2===0) continue;
+      g.fillStyle = '#000';
+      g.fillRect(i*step, j*step, step, step);
+    }
+    g.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(opts.repeatX, opts.repeatY);
+    return tex;
+  }
+
+  function makePlasterTexture(){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#AFA695';
+    g.fillRect(0,0,256,256);
+    for(let i=0;i<900;i++){
+      const x=Math.random()*256, y=Math.random()*256;
+      const shade = Math.random()<0.5 ? 0 : 255;
+      g.globalAlpha = Math.random()*0.06;
+      g.fillStyle = shade===0 ? '#5A5346' : '#D8D0BE';
+      g.beginPath(); g.arc(x,y, 4+Math.random()*10, 0, Math.PI*2); g.fill();
+    }
+    g.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(7, 3);
+    return tex;
+  }
+
+  function makePsychedelicTexture(){
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const g = c.getContext('2d');
+    const cx=256, cy=256;
+    // swirling rainbow rings, distorted into a spiral
+    for(let ring=0; ring<26; ring++){
+      const hue = (ring*14)%360;
+      g.strokeStyle = `hsl(${hue},90%,58%)`;
+      g.lineWidth = 10+Math.random()*6;
+      g.beginPath();
+      const steps=90;
+      for(let i=0;i<=steps;i++){
+        const a = (i/steps)*Math.PI*2 + ring*0.35;
+        const r = ring*10 + Math.sin(a*3+ring)*8;
+        const x = cx+Math.cos(a)*r, y=cy+Math.sin(a)*r;
+        if(i===0) g.moveTo(x,y); else g.lineTo(x,y);
+      }
+      g.stroke();
+    }
+    // scattered high-contrast sparkle dots on top for extra chaos
+    for(let i=0;i<140;i++){
+      const hue = Math.random()*360;
+      g.fillStyle = `hsl(${hue},95%,70%)`;
+      g.globalAlpha = 0.5+Math.random()*0.5;
+      g.beginPath();
+      g.arc(Math.random()*512, Math.random()*512, 3+Math.random()*9, 0, Math.PI*2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(3.5, 1.8);
+    return tex;
+  }
+
+  function buildBathroom(){
+    const wallTex = makePsychedelicTexture();
+
+    const wallMat = new THREE.MeshStandardMaterial({ map:wallTex, roughness:0.85, emissive:0xffffff, emissiveMap:wallTex, emissiveIntensity:0.35 });
+    bgMat = wallMat; bgTex = wallTex;
+    const WALL_X = WALL_X_G; // kept close to the roll so the holder bracket can reach it
+    const CORNER_Z = -3.1; // where the two wall panels meet, just past the roll's edge
+
+    // back wall (faces +X, runs along Z)
+    const wallBack = new THREE.Mesh(new THREE.PlaneGeometry(56, 28), wallMat);
+    wallBack.rotation.y = Math.PI/2;
+    wallBack.position.set(WALL_X, 10, 0);
+    scene.add(wallBack);
+
+    // side wall (faces +Z, runs along X) — meets the back wall at CORNER_Z,
+    // so the roll sits right in the interior corner like the reference photo
+    const wallSide = new THREE.Mesh(new THREE.PlaneGeometry(40, 28), wallMat);
+    wallSide.position.set(WALL_X+17, 10, CORNER_Z);
+    scene.add(wallSide);
+
+    // (floor strips removed — at this camera angle they read as confusing
+    // panels flush against the paper rather than a room floor)
+
+    // baseboard trim where walls meet floor
+    const trimMat = new THREE.MeshStandardMaterial({ color:0xDDD5C4, roughness:0.6 });
+    const trimBack = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.34, 16), trimMat);
+    trimBack.position.set(WALL_X+0.05, 0.17, 0);
+    scene.add(trimBack);
+    const trimSide = new THREE.Mesh(new THREE.BoxGeometry(30, 0.34, 0.08), trimMat);
+    trimSide.position.set(WALL_X+15, 0.17, CORNER_Z);
+    scene.add(trimSide);
+
+    // ---- floor, same psychedelic material as the walls so it all reads
+    // as one continuous trippy room instead of a bare gap ----
+    const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), wallMat);
+    floorMesh.rotation.x = -Math.PI/2;
+    floorMesh.position.set(CHAR_X, -1.3, 0); // paper dips below this a bit past the runner's play area, so the far end disappears under the floor instead of trailing off to the horizon
+    scene.add(floorMesh);
+  }
+
+  function makePaperTexture(){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#FFFDF8';
+    g.fillRect(0,0,256,256);
+    // quilted diamond emboss
+    g.strokeStyle = 'rgba(197,178,138,0.35)';
+    g.lineWidth = 1.3;
+    const cell = 26;
+    for(let gx=-cell; gx<256+cell; gx+=cell){
+      for(let gy=-cell; gy<256+cell; gy+=cell){
+        g.beginPath();
+        g.moveTo(gx, gy+cell/2);
+        g.lineTo(gx+cell/2, gy);
+        g.lineTo(gx+cell, gy+cell/2);
+        g.lineTo(gx+cell/2, gy+cell);
+        g.closePath();
+        g.stroke();
+      }
+    }
+    // perforation seams: two per tile, high-contrast dashes plus tick dots
+    // so the strip's motion is obvious as they scroll past.
+    for(const sx of [64, 192]){
+      g.strokeStyle = '#4A4540';
+      g.lineWidth = 2.6;
+      g.setLineDash([5,6]);
+      g.beginPath(); g.moveTo(sx,0); g.lineTo(sx,256); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = '#3A3530';
+      for(let gy=6; gy<256; gy+=13){
+        g.beginPath(); g.arc(sx, gy, 1.6, 0, Math.PI*2); g.fill();
+      }
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(FAR_X/3.2, 2.4);
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  const TOTAL_LAYERS = 44; // how many wraps the roll starts with, for the depleting-rings look
+  let ringCanvas, ringCtx, ringTexture, lastLayerCount = -1;
+
+  function drawRingCanvas(count){
+    const g = ringCtx, cx=128, cy=128;
+    g.clearRect(0,0,256,256);
+    g.fillStyle = '#FFFDF8';
+    g.fillRect(0,0,256,256);
+    g.strokeStyle = '#EADFC6';
+    g.lineWidth = 2;
+    const outer=126, inner=34;
+    const n = Math.max(1, Math.round(count));
+    for(let i=0;i<n;i++){
+      const rr = n>1 ? inner+(outer-inner)*(i/(n-1)) : outer;
+      g.beginPath(); g.arc(cx,cy,rr,0,Math.PI*2); g.stroke();
+    }
+    g.fillStyle = '#B98B4E';
+    g.beginPath(); g.arc(cx,cy,30,0,Math.PI*2); g.fill();
+    g.strokeStyle='#8C6835'; g.lineWidth=2; g.stroke();
+    g.fillStyle = '#7C5A2E';
+    g.beginPath(); g.arc(cx,cy,12,0,Math.PI*2); g.fill();
+    if(ringTexture) ringTexture.needsUpdate = true;
+  }
+
+  function initRingTexture(){
+    ringCanvas = document.createElement('canvas');
+    ringCanvas.width=256; ringCanvas.height=256;
+    ringCtx = ringCanvas.getContext('2d');
+    ringTexture = new THREE.CanvasTexture(ringCanvas);
+    ringTexture.center.set(0.5,0.5);
+    drawRingCanvas(TOTAL_LAYERS);
+    lastLayerCount = TOTAL_LAYERS;
+  }
+
+  function init3D(){
+    scene = new THREE.Scene();
+    scene.background = null;
+    scene.fog = new THREE.Fog(0xF3E7CC, 24, 46);
+
+    camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
+
+    renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    renderer.setClearColor(0x000000, 0);
+    container.appendChild(renderer.domElement);
+
+    // lights
+    const hemi = new THREE.HemisphereLight(0xfff6e0, 0xcbb98f, 0.85);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.75);
+    dir.position.set(6, 10, 6);
+    scene.add(dir);
+    const fill = new THREE.DirectionalLight(0xffd9c7, 0.25);
+    fill.position.set(-4,3,-4);
+    scene.add(fill);
+
+    // ---- bathroom backdrop ----
+    buildBathroom();
+
+    // ---- paper ribbon ----
+    // geometry extends a bit left of the roll so it can be draped up to meet
+    // the roll's current tangent point each frame (see updatePaperMesh)
+    paperTexture = makePaperTexture();
+    const paperLeftEdge = ROLL_X - 1.0;
+    const paperWidth = FAR_X - paperLeftEdge;
+    paperGeo = new THREE.PlaneGeometry(paperWidth, 5.6, 130, 6);
+    const paperMat = new THREE.MeshStandardMaterial({
+      map: paperTexture, color:0xffffff, roughness:0.85, metalness:0.0,
+      side: THREE.DoubleSide
+    });
+    paperMatRef = paperMat;
+    paperMesh = new THREE.Mesh(paperGeo, paperMat);
+    paperMesh.rotation.x = -Math.PI/2;
+    paperBaseX = paperLeftEdge + paperWidth/2;
+    paperMesh.position.set(paperBaseX, 0, 0);
+    scene.add(paperMesh);
+
+    // ---- roll ----
+    // axle runs across the paper's width (world Z), matching how a real roll unrolls along X
+    rollGroup = new THREE.Group();
+    rollGroup.position.set(ROLL_X-0.3, ROLL_MOUNT_Y, 0);
+    rollGroup.rotation.x = Math.PI/2;
+    scene.add(rollGroup);
+
+    initRingTexture();
+    const ringMat = new THREE.MeshStandardMaterial({ map: ringTexture, color:0xffffff, roughness:0.9 });
+    const rollSideMat = new THREE.MeshStandardMaterial({ color:0xF3E9D2, roughness:0.95 });
+    rollSideMatRef = rollSideMat; ringMatRef = ringMat;
+    rollInner = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 1.5, 5.0, 28, 1, false),
+      [rollSideMat, ringMat, ringMat]
+    );
+    rollGroup.add(rollInner);
+
+    // ---- holder hardware (mount plate + curved cover + axle knob), Toby-style ----
+    const metalMat = new THREE.MeshStandardMaterial({ color:0x86898B, roughness:0.42, metalness:0.55 });
+    const darkMat = new THREE.MeshStandardMaterial({ color:0x2A2A2A, roughness:0.4, metalness:0.3 });
+
+    // plate mounted flush to the wall, behind the roll
+    const mountPlate = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.0, 5.6), metalMat);
+    mountPlate.position.set(-1.75, 0, 0);
+    rollGroup.add(mountPlate);
+
+    // curved cover arcing over the top and back of the roll, open at the
+    // front-bottom where the paper feeds out. The default arc (thetaStart=0,
+    // length=π) is centered on local +X; rotating the mesh 90° about local Y
+    // moves that center to local -Z, which is world +Y (straight up) once
+    // rollGroup's own +90°-about-X orientation is applied.
+    const coverSpan = Math.PI*0.95;
+    const cover = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.62, 1.62, 5.4, 24, 1, true, Math.PI/2-coverSpan/2, coverSpan),
+      new THREE.MeshStandardMaterial({ color:0x86898B, roughness:0.42, metalness:0.55, side:THREE.DoubleSide })
+    );
+    cover.rotation.y = Math.PI/2;
+    rollGroup.add(cover);
+
+    // small dark axle knob on the near end (the push-tab you'd use to swap rolls)
+    const knob = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.5), darkMat);
+    knob.position.set(0.05, 0, 2.55);
+    rollGroup.add(knob);
+
+    // small wall-mounted end brackets
+    const bracketMat = new THREE.MeshStandardMaterial({ color:0xC9C2B4, roughness:0.35, metalness:0.6 });
+    for(const bz of [-2.55, 2.55]){
+      const bracket = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 10, 16), bracketMat);
+      bracket.position.set(0, 0, bz);
+      rollGroup.add(bracket);
+    }
+
+    // ---- character ----
+    // faces -X: toward the roll, opposite the direction the paper feeds out
+    charGroup = new THREE.Group();
+    charGroup.position.set(CHAR_X+charDebugX, charDebugY, charDebugZ);
+    charGroup.rotation.y = -Math.PI/2;
+    scene.add(charGroup);
+
+    const suitMat = new THREE.MeshStandardMaterial({ color:0x243452, roughness:0.6 });
+    const skinMat = new THREE.MeshStandardMaterial({ color:0xF0C49A, roughness:0.7 });
+    const hatMat = new THREE.MeshStandardMaterial({ color:0x111111, roughness:0.4 });
+    const roseMat = new THREE.MeshStandardMaterial({ color:0xC24358, roughness:0.5 });
+    const shoeMat = new THREE.MeshStandardMaterial({ color:0x111111, roughness:0.5 });
+
+    const hipPivot = new THREE.Group();
+    hipPivot.position.set(0, 1.0, 0);
+    charGroup.add(hipPivot);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.78,0.42), suitMat);
+    body.position.set(0,0.45,0);
+    body.rotation.x = 0.12; // slight tense hunch forward
+    hipPivot.add(body);
+
+    const bow = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.12,0.12), roseMat);
+    bow.position.set(0,0.82,0.24);
+    hipPivot.add(bow);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28,16,16), skinMat);
+    head.position.set(0,1.12,0.05);
+    head.rotation.x = 0.1; // looking down worriedly
+    hipPivot.add(head);
+
+    const mustache = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.05,0.06), hatMat);
+    mustache.position.set(0,1.03,0.31);
+    hipPivot.add(mustache);
+
+    // worried eyebrows — furrowed
+    const browMat = new THREE.MeshStandardMaterial({ color:0x3A2A1E, roughness:0.6 });
+    const browL = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.03,0.04), browMat);
+    browL.position.set(-0.09,1.23,0.29); browL.rotation.z = 0.35;
+    hipPivot.add(browL);
+    const browR = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.03,0.04), browMat);
+    browR.position.set(0.09,1.23,0.29); browR.rotation.z = -0.35;
+    hipPivot.add(browR);
+
+    // a nervous sweat drop, because he really needs to go
+    const sweatMat = new THREE.MeshStandardMaterial({ color:0x7FD4F0, roughness:0.3, transparent:true, opacity:0.85 });
+    const sweat = new THREE.Mesh(new THREE.SphereGeometry(0.055,8,8), sweatMat);
+    sweat.position.set(0.24,1.22,0.14);
+    hipPivot.add(sweat);
+
+    const hatTop = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.34,16), hatMat);
+    hatTop.position.set(0,1.5,0.05);
+    hatTop.rotation.x = 0.1;
+    hipPivot.add(hatTop);
+    const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.05,16), hatMat);
+    hatBrim.position.set(0,1.35,0.05);
+    hatBrim.rotation.x = 0.1;
+    hipPivot.add(hatBrim);
+    const hatBand = new THREE.Mesh(new THREE.CylinderGeometry(0.205,0.205,0.06,16), roseMat);
+    hatBand.position.set(0,1.36,0.05);
+    hatBand.rotation.x = 0.1;
+    hipPivot.add(hatBand);
+
+    function makeLimb(mat, len){
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.16,len,0.2), mat);
+      m.position.set(0,-len/2,0);
+      g.add(m);
+      return g;
+    }
+    // knock-kneed stance — legs angled inward like he's holding it in
+    legL = makeLimb(suitMat, 0.62); legL.position.set(-0.14,0.42,0.02); legL.rotation.z = 0.22; hipPivot.add(legL);
+    legR = makeLimb(suitMat, 0.62); legR.position.set(0.14,0.42,-0.02); legR.rotation.z = -0.22; hipPivot.add(legR);
+    const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.12,0.32), shoeMat); shoeL.position.set(0,-0.62,0.06); legL.add(shoeL);
+    const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.12,0.32), shoeMat); shoeR.position.set(0,-0.62,0.06); legR.add(shoeR);
+
+    // arms bent forward, clutched together in front of him
+    armL = makeLimb(suitMat, 0.5); armL.position.set(-0.28,0.88,0); armL.rotation.z = 0.55; hipPivot.add(armL);
+    armR = makeLimb(suitMat, 0.5); armR.position.set(0.28,0.88,0); armR.rotation.z = -0.55; hipPivot.add(armR);
+
+    // shadow blob
+    const shadowMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.28 });
+    shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.42,20), shadowMat);
+    shadowMesh.rotation.x = -Math.PI/2;
+    shadowMesh.position.set(CHAR_X, 0.02, 0);
+    scene.add(shadowMesh);
+
+    resize3D();
+    document.getElementById('loadingMsg').style.display='none';
+  }
+
+  function resize3D(){
+    W = wrap.clientWidth; H = wrap.clientHeight;
+    if(!renderer) return;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+    renderer.setSize(W,H,true);
+    camera.aspect = W/H;
+    applyCameraFraming();
+    camera.updateProjectionMatrix();
+    if(typeof resizeTrail==='function') resizeTrail();
+  }
+  window.addEventListener('resize', resize3D);
+
+  // Camera centers on the runner; the roll and its corner-wall backdrop still
+  // read clearly further back up the slope.
+  let camZoom = 1.0; // debug: multiplies CAM_OFFSET distance
+  let charDebugX = -3.3; // debug: extra offset added to the runner's on-screen position
+  let charDebugY = -0.7, charDebugZ = 0.0;
+  const CAM_TARGET = new THREE.Vector3(CHAR_X-1.5, 1.6, 3.2);
+  const CAM_OFFSET = new THREE.Vector3(4.32, 1.87, 3.69); // camera position relative to target
+  const HALF_HFOV = THREE.MathUtils.degToRad(31); // horizontal field of view we always guarantee
+
+  // Since world X (roll -> character -> paper ahead) is the long axis and must always fit
+  // on screen, we hold horizontal FOV fixed and let vertical FOV widen on tall/narrow
+  // phone screens instead of letting the sides (and the roll) get clipped.
+  function applyCameraFraming(){
+    if(!camera) return;
+    const aspect = Math.max(camera.aspect, 0.01);
+    let halfV = Math.atan(Math.tan(HALF_HFOV)/aspect);
+    halfV = Math.min(halfV, THREE.MathUtils.degToRad(58));
+    camera.fov = THREE.MathUtils.radToDeg(halfV)*2;
+  }
+
+  function rippleHeightAt(worldX, now){
+    let h = 0;
+    for(const r of activeRipples){
+      const age = (now-r.t0)/1000;
+      if(age<0 || age>RIPPLE_LIFE) continue;
+      const envelope = Math.sin(Math.PI*Math.min(1, age/RIPPLE_LIFE));
+      const dx = worldX-(CHAR_X+slideDist-forwardProgress);
+      const spatial = Math.max(0, Math.cos(Math.min(1, Math.abs(dx)/RIPPLE_RADIUS)*Math.PI/2));
+      h += envelope*spatial*r.severity*MAX_AMPLITUDE;
+    }
+    return h;
+  }
+
+  function currentRollRadius(){
+    const rMax = 1.5, rMin = 0.42;
+    return Math.max(rMin, rMax - rollScore*0.028);
+  }
+
+  function paperSurfaceHeightAt(worldX, now){
+    const r = currentRollRadius();
+    const ATTACH_ANGLE = THREE.MathUtils.degToRad(58);
+    const attachX = (ROLL_X-0.3) + r*Math.cos(ATTACH_ANGLE);
+    const attachY = ROLL_MOUNT_Y + r*Math.sin(ATTACH_ANGLE);
+    const blendEnd = 3.0;
+    const groundBase = slopeHeightAt(worldX) + rippleHeightAt(worldX, now);
+    let h = groundBase;
+    if(worldX < blendEnd){
+      const dtSpan = blendEnd-attachX;
+      const t = Math.max(0, Math.min(1, (worldX-attachX)/dtSpan));
+      const groundAtBlendEnd = slopeHeightAt(blendEnd);
+      const m0 = 0;
+      const m1 = -SLOPE_RATE*dtSpan;
+      const h00 = 2*t*t*t-3*t*t+1;
+      const h10 = t*t*t-2*t*t+t;
+      const h01 = -2*t*t*t+3*t*t;
+      const h11 = t*t*t-t*t;
+      const drapeH = h00*attachY + h10*m0 + h01*groundAtBlendEnd + h11*m1;
+      h = Math.max(h, drapeH);
+    }
+    return h;
+  }
+
+  function updatePaperMesh(){
+    const pos = paperGeo.attributes.position;
+    const now = performance.now();
+    for(let i=0;i<pos.count;i++){
+      const localX = pos.getX(i);
+      const worldX = localX + paperBaseX;
+      const h = paperSurfaceHeightAt(worldX, now);
+      pos.setZ(i, h); // plane rotated -90 on X: local Z -> world Y (up)
+    }
+    pos.needsUpdate = true;
+    paperGeo.computeVertexNormals();
+    paperTexture.offset.x -= paperSpeed*0.0025;
+  }
+
+  function updateBackground(dt){
+    if(!bgMat) return;
+    // cycles faster the faster paper is being pulled, plus a slow baseline
+    // drift so it's never fully static even when idle — and it ramps up
+    // permanently with how far you've run, so later in a run it's wilder
+    const speedFrac = Math.min(1, paperSpeed/MAX_SPEED);
+    const chaos = Math.min(1, score/40); // creeps toward max chaos over a run
+    bgHue = (bgHue + dt*(0.12 + speedFrac*0.9 + chaos*0.5)) % 1;
+    bgMat.color.setHSL(bgHue, 0.9+chaos*0.1, 0.58+chaos*0.15);
+    bgMat.emissiveIntensity = 0.6 + speedFrac*0.6 + chaos*0.3;
+    if(bgTex){
+      bgTex.offset.x += dt*(0.05 + speedFrac*0.35);
+      bgTex.offset.y += dt*(0.02 + speedFrac*0.15)*Math.sin(performance.now()*0.0003);
+    }
+  }
+
+  function updateRoll(dt){
+    const rMax = 1.5;
+    const r = currentRollRadius();
+    rollInner.scale.set(r/rMax, 1, r/rMax);
+    rollInner.rotation.y += paperSpeed*2.4*dt;
+
+    // clatter on the holder when pulling fast
+    const rattle = Math.min(1, paperSpeed/MAX_SPEED);
+    const t = performance.now()*0.001;
+    rollGroup.position.y = ROLL_MOUNT_Y + Math.sin(t*55)*0.035*rattle + Math.sin(t*23+1.3)*0.02*rattle;
+    rollGroup.position.z = Math.sin(t*47+2.1)*0.03*rattle;
+    rollGroup.rotation.x = Math.PI/2 + Math.sin(t*61+0.5)*0.055*rattle;
+    rollGroup.rotation.z = Math.sin(t*39+0.9)*0.03*rattle;
+
+    const rMin = 0.42;
+    const frac = (r-rMin)/(rMax-rMin);
+    const layers = Math.max(2, Math.round(2+frac*(TOTAL_LAYERS-2)));
+    if(layers !== lastLayerCount){
+      lastLayerCount = layers;
+      drawRingCanvas(layers);
+    }
+  }
+
+  function updateCharacter(dt){
+    const hip = charGroup.children[0];
+    const now = performance.now();
+    if(state==='playing' && !reloading){
+      charGroup.position.x = CHAR_X + slideDist - forwardProgress + charDebugX;
+      charGroup.position.y = charDebugY;
+      charGroup.position.z = charDebugZ;
+    }
+    // stand on top of whatever the paper's local height is at his feet, so a
+    // tall wave never buries him regardless of jump timing
+    const groundY = (state==='ending' || reloading) ? 0 : paperSurfaceHeightAt(charGroup.position.x, now);
+    hip.position.y = groundY + 1.0 + charY;
+
+    // showing off once he's going fast: random spins and backflips
+    if(state==='playing' && !reloading){
+      const speedFrac = paperSpeed/MAX_SPEED;
+      if(!trickActive && speedFrac>0.55 && now>=nextTrickAt){
+        trickActive = true;
+        trickType = Math.random()<0.5 ? 'spin' : 'roll';
+        trickDuration = trickType==='spin' ? 420 : 480;
+        trickT = 0;
+        spawnTrickBurst();
+      }
+      if(trickActive){
+        trickT += dt*1000;
+        const p = Math.min(1, trickT/trickDuration);
+        const jumpArc = Math.sin(Math.min(1,p)*Math.PI); // 0 -> 1 -> 0
+        if(trickType==='spin'){
+          charGroup.rotation.y = -Math.PI/2 + p*Math.PI*2;
+          hip.position.y += jumpArc*1.6; // jump while spinning
+        } else {
+          // rotate the hip around its OWN origin (his body's actual height)
+          // instead of charGroup's ground-level origin — otherwise the swing
+          // arc dips him below the paper surface partway through
+          hip.position.y += jumpArc*1.4;
+          hip.rotation.z = p*Math.PI*2;
+        }
+        if(p>=1){
+          trickActive = false;
+          charGroup.rotation.y = -Math.PI/2;
+          charGroup.rotation.x = 0;
+          charGroup.rotation.z = 0;
+          hip.rotation.z = 0;
+          nextTrickAt = now + 500 + Math.random()*900;
+        }
+      } else {
+        charGroup.rotation.y = -Math.PI/2;
+        charGroup.rotation.x = 0;
+        charGroup.rotation.z = 0;
+        hip.rotation.z = 0;
+      }
+    }
+
+    if(!dragging){ strideInput += (0-strideInput)*Math.min(1, dt*6); }
+    const liveBlend = dragging ? 0.85 : 0;
+    const idleStride = Math.sin(legPhase)*0.85;
+    const stride = jumping ? 0.9 : idleStride*(1-liveBlend) + strideInput*0.95*liveBlend;
+    legL.rotation.x = stride*0.8;
+    legR.rotation.x = -stride*0.8;
+    armL.rotation.x = 0.3 + stride*0.15; // stays mostly clutched, just a nervous little jitter
+    armR.rotation.x = 0.3 - stride*0.15;
+
+    shadowMesh.position.x = charGroup.position.x;
+    shadowMesh.position.y = groundY + 0.02;
+    const airborneAmt = Math.min(1, charY/MAX_AMPLITUDE);
+    shadowMesh.scale.setScalar(1 - airborneAmt*0.55);
+    shadowMesh.material.opacity = 0.28*(1-airborneAmt*0.7)*(state==='ending' ? Math.max(0,1-tripT/1.15) : 1);
+  }
+
+  let camPeriodStartTime = performance.now();
+  let camPeriodFrom = new THREE.Vector3(0,0,0);
+  let camPeriodTo = randomCamDelta();
+  const CAM_PERIOD_MS = 9000;            // moves to a new position roughly every 9s
+  const CAM_PERIOD_TRANSITION_MS = 2600; // takes ~2.6s to glide there
+  function randomCamDelta(){
+    return new THREE.Vector3((Math.random()-0.5)*4.5, (Math.random()-0.5)*2.8, (Math.random()-0.5)*4.0);
+  }
+
+  function render3D(shakeAmt){
+    let sx=0, sy=0;
+    if(shakeAmt>0){
+      sx = (Math.random()-0.5)*shakeAmt*0.5;
+      sy = (Math.random()-0.5)*shakeAmt*0.3;
+    }
+    // gentle idle drift on the offset so the framing never feels totally
+    // static, even when nothing else is happening
+    const t = performance.now()*0.001;
+    const driftX = Math.sin(t*0.23)*1.6;
+    const driftY = Math.sin(t*0.17+1.3)*1.1;
+    const driftZ = Math.sin(t*0.19+2.6)*1.4;
+
+    // periodic bigger repositioning — every ~9s, glide to a new nearby
+    // vantage point over ~2.6s, then hold until the next cycle
+    let periodX=0, periodY=0, periodZ=0;
+    if(!reloading){
+      const now = performance.now();
+      const elapsed = now - camPeriodStartTime;
+      if(elapsed > CAM_PERIOD_MS){
+        camPeriodFrom.copy(camPeriodTo);
+        camPeriodTo.copy(randomCamDelta());
+        camPeriodStartTime = now;
+      }
+      const transP = Math.min(1, (now-camPeriodStartTime)/CAM_PERIOD_TRANSITION_MS);
+      const ease = transP*transP*(3-2*transP);
+      periodX = camPeriodFrom.x + (camPeriodTo.x-camPeriodFrom.x)*ease;
+      periodY = camPeriodFrom.y + (camPeriodTo.y-camPeriodFrom.y)*ease;
+      periodZ = camPeriodFrom.z + (camPeriodTo.z-camPeriodFrom.z)*ease;
+    }
+
+    camera.position.set(
+      CAM_TARGET.x+(CAM_OFFSET.x+driftX+periodX)*camZoom+sx,
+      CAM_TARGET.y+(CAM_OFFSET.y+driftY+periodY)*camZoom+sy,
+      CAM_TARGET.z+(CAM_OFFSET.z+driftZ+periodZ)*camZoom
+    );
+    camera.lookAt(CAM_TARGET);
+    renderer.render(scene, camera);
+  }
+
+  // ---------- Swipe-to-pull (rhythm timing) ----------
+  // Each discrete swipe stroke (pointerdown -> moves past a threshold) is
+  // judged against the time since the previous stroke. Matching pace (and
+  // gradually shortening it) speeds up the paper; drifting off pace causes a
+  // wave (auto-jumped); drifting too far ends the run.
+  const pullHint = document.getElementById('pullHint');
+  let awaitingSwipe=false, pullId=null, startX=0, startY=0, hintFaded=false;
+  const SWIPE_THRESHOLD = 16; // px of movement before a stroke counts as a swipe
+
+  function localPos(e){
+    const rect = wrap.getBoundingClientRect();
+    return { x:e.clientX-rect.left, y:e.clientY-rect.top };
+  }
+
+  function judgeSwipe(interval, x, y){
+    const ratio = interval/expectedInterval;
+    if(ratio>=GOOD_LOW && ratio<=GOOD_HIGH){
+      expectedInterval = clamp(expectedInterval*0.45+interval*0.55, MIN_INTERVAL, MAX_INTERVAL);
+      const target = clamp(MAX_SPEED*(START_INTERVAL/expectedInterval)*0.55, 0, MAX_SPEED);
+      paperSpeed = Math.max(paperSpeed, target);
+      slideDist = Math.max(0, slideDist-1.1);
+      spawnFX(x,y,'good');
+    } else if(ratio>=WAVE_LOW && ratio<=WAVE_HIGH){
+      expectedInterval = clamp(expectedInterval*0.78+interval*0.22, MIN_INTERVAL, MAX_INTERVAL);
+      const sev = Math.min(1, Math.abs(Math.log(ratio))/Math.log(WAVE_HIGH));
+      activeRipples.push({t0:performance.now(), severity:0.4+sev*0.6});
+      if(!jumping){ jumping=true; charVY=JUMP_V; } // auto-jump over the wave
+      const target = clamp(MAX_SPEED*(START_INTERVAL/expectedInterval)*0.32, 0, MAX_SPEED);
+      paperSpeed = Math.max(paperSpeed, target);
+      slideDist = Math.max(0, slideDist-0.55);
+      spawnFX(x,y,'wave');
+    } else {
+      spawnFX(x,y,'fail');
+      startFail();
+    }
+  }
+
+  function registerSwipe(now, x, y){
+    if(state!=='playing') return;
+    if(lastSwipeAt===null){ lastSwipeAt=now; slideDist=Math.max(0,slideDist-0.4); spawnFX(x,y,'good'); return; } // first swipe just sets the baseline
+    const interval = now-lastSwipeAt;
+    lastSwipeAt = now;
+    judgeSwipe(interval, x, y);
+  }
+
+  function pullDown(e){
+    if(state!=='playing' && state!=='ready') return;
+    awaitingSwipe=true; pullId=e.pointerId;
+    startX=e.clientX; startY=e.clientY;
+    dragging=true;
+    try{ container.setPointerCapture(e.pointerId); }catch(err){}
+    if(!hintFaded){ hintFaded=true; pullHint.classList.add('faded'); trailPoints = trailPoints.filter(p=>!p.ghost); }
+    e.preventDefault();
+  }
+  function pullMove(e){
+    if(e.pointerId!==pullId) return;
+    const p = localPos(e);
+    trailPoints.push({x:p.x, y:p.y, t:performance.now(), ghost:false});
+    const dx = e.clientX-startX;
+    strideInput = clamp(dx/60, -1, 1); // finger moves right -> right leg forward, etc.
+    if(awaitingSwipe){
+      const dist = Math.hypot(dx, e.clientY-startY);
+      if(dist>=SWIPE_THRESHOLD){
+        awaitingSwipe=false; // one registration per stroke; lift and swipe again for the next beat
+        registerSwipe(performance.now(), p.x, p.y);
+      }
+    }
+    e.preventDefault();
+  }
+  function pullUp(e){
+    if(e.pointerId!==pullId) return;
+    awaitingSwipe=false; pullId=null; dragging=false;
+  }
+  container.addEventListener('pointerdown', pullDown);
+  container.addEventListener('pointermove', pullMove);
+  container.addEventListener('pointerup', pullUp);
+  container.addEventListener('pointercancel', pullUp);
+
+  // Backstop: some mobile browsers still scroll/bounce the outer page on
+  // touchmove even with touch-action:none in CSS, so block it explicitly —
+  // except inside the camera debug panel, where sliders need real touchmove.
+  document.addEventListener('touchmove', (e)=>{
+    if(e.target.closest('#camDebugPanel')) return;
+    e.preventDefault();
+  }, { passive:false });
+  document.addEventListener('touchstart', (e)=>{
+    if(e.target.closest('#camDebugPanel')) return;
+    if(e.touches.length>1) e.preventDefault(); // block pinch-zoom
+  }, { passive:false });
+  document.addEventListener('gesturestart', (e)=>{ e.preventDefault(); });
+
+  // ---------- Finger-trail visualization ----------
+  const trailCanvas = document.getElementById('trailCanvas');
+  const tctx = trailCanvas.getContext('2d');
+  let trailPoints = []; // {x,y,t,ghost}
+  let fxPulses = [];    // {x,y,t0,kind}
+  let sparkles = [];    // {x,y,t0,life,dx,dy,size,hue,spin}
+
+  const SPARKLE_HUES = ['#FF8FC0','#FFD35C','#B39BFF','#7FE0D6','#FF9E7A'];
+  function spawnSparkle(x,y,boost){
+    const n = boost ? 6+Math.floor(Math.random()*4) : (Math.random()<0.65 ? 1 : 2);
+    for(let i=0;i<n;i++){
+      const ang = Math.random()*Math.PI*2;
+      const spd = boost ? 60+Math.random()*160 : 10+Math.random()*40;
+      sparkles.push({
+        x: x+(Math.random()-0.5)*10, y: y+(Math.random()-0.5)*10,
+        t0: performance.now(), life: 420+Math.random()*380,
+        dx: Math.cos(ang)*spd, dy: Math.sin(ang)*spd - (boost?40:10),
+        size: (boost? 4:2.5)+Math.random()*(boost?5:3.5),
+        color: SPARKLE_HUES[Math.floor(Math.random()*SPARKLE_HUES.length)],
+        spin: (Math.random()-0.5)*8
+      });
+    }
+  }
+  function drawSparkle(ctx,x,y,size,alpha,color,rot){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x,y); ctx.rotate(rot);
+    ctx.fillStyle = color;
+    ctx.shadowColor = color; ctx.shadowBlur = size*1.8;
+    ctx.beginPath();
+    ctx.moveTo(0,-size); ctx.lineTo(size*0.26,-size*0.26);
+    ctx.lineTo(size,0); ctx.lineTo(size*0.26,size*0.26);
+    ctx.lineTo(0,size); ctx.lineTo(-size*0.26,size*0.26);
+    ctx.lineTo(-size,0); ctx.lineTo(-size*0.26,-size*0.26);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function spawnFX(x,y,kind){ fxPulses.push({x,y,t0:performance.now(),kind}); spawnSparkle(x,y,true); }
+
+  function spawnTrickBurst(){
+    // character renders roughly center-low on screen; burst from there
+    const bx = W*0.5, by = H*0.56;
+    for(let i=0;i<28;i++){
+      const ang = (i/28)*Math.PI*2;
+      spawnSparkle(bx+Math.cos(ang)*14, by+Math.sin(ang)*14, true);
+    }
+    fxPulses.push({x:bx,y:by,t0:performance.now(),kind:'trick'});
+    fxPulses.push({x:bx,y:by,t0:performance.now()+60,kind:'trick'});
+  }
+
+  function resizeTrail(){
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    trailCanvas.width = W*dpr; trailCanvas.height = H*dpr;
+    tctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  // A looping ghost demo: short discrete strokes with a shrinking pause
+  // between them, showing exactly the "swipe, then swipe again a little
+  // sooner" rhythm the game is asking for.
+  const DEMO_INTERVALS = [900,700,560,440,350];
+  const DEMO_PAUSE = 650;
+  function demoPhase(now){
+    const total = DEMO_INTERVALS.reduce((a,b)=>a+b,0) + DEMO_PAUSE;
+    let t = now % total, acc = 0;
+    for(let i=0;i<DEMO_INTERVALS.length;i++){
+      const gap = DEMO_INTERVALS[i];
+      if(t < acc+gap){
+        const local = t-acc, strokeDur=170;
+        if(local < strokeDur){
+          const p = local/strokeDur;
+          const dir = i%2===0 ? 1 : -1;
+          const cx = W*0.5, cy = H*0.6, amp = Math.min(70, W*0.16);
+          return { x: cx+dir*(-amp+p*2*amp), y: cy+Math.sin(p*Math.PI)*-16, active:true };
+        }
+        return { active:false };
+      }
+      acc += gap;
+    }
+    return { active:false };
+  }
+
+  function drawTrail(now){
+    tctx.clearRect(0,0,W,H);
+    const TRAIL_LIFE = 650;
+    trailPoints = trailPoints.filter(pt => now-pt.t < TRAIL_LIFE);
+    tctx.lineCap = 'round';
+    for(let i=1;i<trailPoints.length;i++){
+      const a=trailPoints[i-1], b=trailPoints[i];
+      if(a.ghost!==b.ghost) continue;
+      const age = now-b.t;
+      const lifeP = Math.max(0, 1-age/TRAIL_LIFE);
+      const alpha = lifeP*lifeP; // fade faster near the tail for a cleaner afterimage
+      if(b.ghost){
+        tctx.shadowBlur = 6;
+        tctx.shadowColor = `rgba(255,158,122,${alpha*0.5})`;
+        tctx.strokeStyle = `rgba(255,158,122,${alpha*0.55})`;
+        tctx.lineWidth = 5;
+      } else {
+        // pink-to-gold pastel gradient along the fresh stroke
+        const grad = tctx.createLinearGradient(a.x,a.y,b.x,b.y);
+        grad.addColorStop(0, `rgba(255,143,192,${alpha*0.85})`);
+        grad.addColorStop(1, `rgba(255,211,92,${alpha*0.95})`);
+        tctx.shadowBlur = 14*lifeP;
+        tctx.shadowColor = `rgba(255,170,210,${alpha*0.7})`;
+        tctx.strokeStyle = grad;
+        tctx.lineWidth = 4 + lifeP*7; // thick near the fingertip, tapering with age
+      }
+      tctx.beginPath(); tctx.moveTo(a.x,a.y); tctx.lineTo(b.x,b.y); tctx.stroke();
+      if(!b.ghost && Math.random()<0.55) spawnSparkle(b.x,b.y,false);
+    }
+    tctx.shadowBlur = 0;
+    const last = trailPoints[trailPoints.length-1];
+    if(last){
+      const age = now-last.t;
+      const alpha = Math.max(0, 1-age/TRAIL_LIFE);
+      tctx.save();
+      tctx.shadowColor = last.ghost ? `rgba(255,158,122,${alpha})` : `rgba(255,196,150,${alpha})`;
+      tctx.shadowBlur = 12;
+      tctx.beginPath();
+      tctx.fillStyle = last.ghost ? `rgba(255,158,122,${alpha*0.8})` : `rgba(255,255,255,${alpha})`;
+      tctx.arc(last.x, last.y, last.ghost?7:8, 0, Math.PI*2);
+      tctx.fill();
+      tctx.restore();
+    }
+    // judgement feedback rings — cute pastel palette, still distinguishable
+    fxPulses = fxPulses.filter(fx => now-fx.t0 < (fx.kind==='trick'?650:480));
+    for(const fx of fxPulses){
+      if(fx.kind==='trick'){
+        const age = now-fx.t0;
+        if(age<0) continue;
+        const p = age/650;
+        const alpha = Math.max(0, 1-p);
+        // big rainbow ring
+        const grad = tctx.createLinearGradient(fx.x-70,fx.y,fx.x+70,fx.y);
+        grad.addColorStop(0,'#FF6FCE'); grad.addColorStop(0.33,'#FFD84D');
+        grad.addColorStop(0.66,'#5FE0FF'); grad.addColorStop(1,'#B98CFF');
+        tctx.beginPath();
+        tctx.strokeStyle = grad;
+        tctx.lineWidth = 6*(1-p*0.5);
+        tctx.shadowColor = 'rgba(255,255,255,0.9)'; tctx.shadowBlur = 20;
+        tctx.arc(fx.x, fx.y, 16+p*130, 0, Math.PI*2);
+        tctx.stroke();
+        tctx.shadowBlur = 0;
+        // white flash core, fades fast
+        if(p<0.35){
+          tctx.beginPath();
+          tctx.fillStyle = `rgba(255,255,255,${(1-p/0.35)*0.55})`;
+          tctx.arc(fx.x, fx.y, 60*(1-p/0.35), 0, Math.PI*2);
+          tctx.fill();
+        }
+        continue;
+      }
+      const age = now-fx.t0, p = age/480;
+      const alpha = Math.max(0, 1-p);
+      const color = fx.kind==='good' ? `255,143,192` : fx.kind==='wave' ? `179,155,255` : `230,80,90`;
+      tctx.beginPath();
+      tctx.strokeStyle = `rgba(${color},${alpha})`;
+      tctx.lineWidth = 3;
+      tctx.arc(fx.x, fx.y, 10+p*46, 0, Math.PI*2);
+      tctx.stroke();
+    }
+    // sparkle particles: drift, spin, and twinkle
+    sparkles = sparkles.filter(s => now-s.t0 < s.life);
+    for(const s of sparkles){
+      const age = now-s.t0, p = age/s.life;
+      const alpha = Math.max(0, 1-p) * (0.6+0.4*Math.sin(age*0.03+s.spin));
+      const sx = s.x + s.dx*(age/1000);
+      const sy = s.y + s.dy*(age/1000) + 60*(age/1000)*(age/1000); // gentle gravity drift
+      drawSparkle(tctx, sx, sy, s.size*(1-p*0.4), alpha, s.color, age*0.006*s.spin);
+    }
+  }
+
+
+  function trailLoop(ts){
+    requestAnimationFrame(trailLoop);
+    const now = performance.now();
+    if(!hintFaded && (state==='ready' || state==='playing')){
+      const d = demoPhase(now);
+      if(d.active) trailPoints.push({x:d.x, y:d.y, t:now, ghost:true});
+    }
+    drawTrail(now);
+  }
+  requestAnimationFrame(trailLoop);
+
+  // ---------- HUD ----------
+  const scoreVal = document.getElementById('scoreVal');
+  const timerVal = document.getElementById('timerVal');
+  function updateHUD(){
+    scoreVal.innerHTML = score.toFixed(1)+'<span>m</span>';
+    timerVal.textContent = Math.ceil(timeLeft);
+  }
+
+  // ---------- Overlays ----------
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay = document.getElementById('endOverlay');
+  document.getElementById('startBtn').addEventListener('click', ()=>{
+    startOverlay.classList.add('hidden');
+    reset(); state='playing'; lastTS=null;
+    requestAnimationFrame(loop);
+  });
+  document.getElementById('retryBtn').addEventListener('click', ()=>{
+    endOverlay.classList.add('hidden');
+    reset(); state='playing'; lastTS=null;
+    requestAnimationFrame(loop);
+  });
+
+  async function endGame(early){
+    state='over';
+    document.getElementById('endTitle').textContent = early ? 'こけて流されてしまった…' : 'タイムアップ！';
+    document.getElementById('finalScore').textContent = score.toFixed(1)+'m';
+    const recordEl = document.getElementById('newRecord');
+    if(score>highScore){
+      highScore=score;
+      await saveHighScore(highScore);
+      recordEl.textContent = '🎉 新記録！';
+    } else {
+      recordEl.textContent = 'ハイスコア: '+highScore.toFixed(1)+'m';
+    }
+    endOverlay.classList.remove('hidden');
+  }
+
+  let reloadStartX=0, reloadStartY=0, reloadStartZ=0;
+  let camBaseTarget=null, camBaseOffsetScale=1, camBaseZoom=1;
+  let HOLDER_X = -0.1, HOLDER_Y_OFF = 0.7; // landing spot standing on top of the roll's cover
+  let RELOAD_JUMP_DUR = 0.9, RELOAD_JUMP_ARC = 5;
+  const RELOAD_CAM_TARGET = new THREE.Vector3(0.3, ROLL_MOUNT_Y-0.6, 0.5);
+  const RELOAD_ZOOM_MULT = 2.4; // how much extra zoom-out (on top of current zoom) while showing the swap
+
+  function startReload(){
+    reloading = true;
+    reloadPhase = 'approach';
+    reloadT = 0;
+    awaitingSwipe = false;
+    if(charGroup){
+      reloadStartX = charGroup.position.x;
+      reloadStartY = charGroup.position.y;
+      reloadStartZ = charGroup.position.z;
+    }
+    camBaseTarget = CAM_TARGET.clone();
+    camBaseZoom = camZoom;
+    if(paperMesh) paperMesh.visible = false; // paper runs out — nothing left to stand on
+  }
+
+  function updateReloadSequence(dt){
+    reloadT += dt;
+    const holderY = ROLL_MOUNT_Y + HOLDER_Y_OFF;
+
+    if(reloadPhase==='approach'){
+      const dur = RELOAD_JUMP_DUR;
+      const p = Math.min(1, reloadT/dur);
+      const ease = p*p*(3-2*p);
+      const arc = Math.sin(p*Math.PI)*RELOAD_JUMP_ARC;
+      if(charGroup){
+        charGroup.position.x = reloadStartX + (HOLDER_X-reloadStartX)*ease;
+        charGroup.position.y = reloadStartY + (holderY-reloadStartY)*ease + arc;
+        charGroup.position.z = reloadStartZ*(1-ease);
+        // no tumbling — just a clean jump
+      }
+      // camera pans/zooms out toward the holder so the swap is clearly visible
+      CAM_TARGET.copy(camBaseTarget).lerp(RELOAD_CAM_TARGET, ease);
+      camZoom = camBaseZoom + (camBaseZoom*RELOAD_ZOOM_MULT-camBaseZoom)*ease;
+      if(p>=1){
+        if(charGroup){ charGroup.rotation.z = 0; charGroup.rotation.x = 0; }
+        reloadPhase = 'swap'; reloadT = 0;
+      }
+      return;
+    }
+
+    if(reloadPhase==='swap'){
+      const dur = 0.6;
+      const p = Math.min(1, reloadT/dur);
+      if(p>=0.4 && !reloadDidSwap){
+        reloadDidSwap = true;
+        themeIndex = (themeIndex+1) % PAPER_THEMES.length;
+        const theme = PAPER_THEMES[themeIndex];
+        if(paperMatRef) paperMatRef.color.setHex(theme.paper);
+        if(rollSideMatRef) rollSideMatRef.color.setHex(theme.roll);
+        rollScore = 0;
+        lastLayerCount = -1; drawRingCanvas(TOTAL_LAYERS);
+        MAX_SPEED = MAX_SPEED*1.12; // a little faster with every fresh roll
+        spawnTrickBurst();
+      }
+      if(p>=1){
+        reloadDidSwap = false;
+        reloadPhase = 'return'; reloadT = 0;
+        reloadStartX = charGroup.position.x;
+        reloadStartY = charGroup.position.y;
+        reloadStartZ = charGroup.position.z;
+        if(paperMesh) paperMesh.visible = true; // fresh roll, paper's back
+      }
+      return;
+    }
+
+    if(reloadPhase==='return'){
+      const dur = 0.75;
+      const p = Math.min(1, reloadT/dur);
+      const ease = p*p*(3-2*p);
+      const arc = Math.sin(p*Math.PI)*2.0;
+      const targetX = CHAR_X;
+      if(charGroup){
+        charGroup.position.x = reloadStartX + (targetX-reloadStartX)*ease;
+        charGroup.position.y = reloadStartY*(1-ease) + arc;
+        // no tumbling — just a clean jump back
+      }
+      // camera pans back to the normal gameplay framing
+      CAM_TARGET.copy(RELOAD_CAM_TARGET).lerp(camBaseTarget, ease);
+      camZoom = (camBaseZoom*RELOAD_ZOOM_MULT) + (camBaseZoom-camBaseZoom*RELOAD_ZOOM_MULT)*ease;
+      if(p>=1){
+        if(charGroup){ charGroup.rotation.z = 0; }
+        CAM_TARGET.copy(camBaseTarget);
+        camZoom = camBaseZoom;
+        reloading = false;
+        reloadPhase = '';
+        forwardProgress = 0;
+        slideDist = 0;
+        paperSpeed = Math.max(paperSpeed, MAX_SPEED*0.4);
+      }
+    }
+  }
+  function startFail(){
+    if(state!=='playing') return;
+    state='ending';
+    tripT=0;
+    shakeT=0.45;
+    paperSpeed=0;
+    awaitingSwipe=false;
+  }
+
+  // ---------- Main loop ----------
+  function loop(ts){
+    if(state==='ready'||state==='over'){ return; }
+    if(lastTS===null) lastTS=ts;
+    let dt = (ts-lastTS)/1000;
+    dt = Math.min(dt, 0.033);
+    lastTS = ts;
+
+    update(dt);
+    updatePaperMesh();
+    updateRoll(dt);
+    updateCharacter(dt);
+    updateBackground(dt);
+    if(shakeT>0) shakeT = Math.max(0, shakeT-dt*1.4);
+    render3D(shakeT);
+
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt){
+    if(state==='ending'){
+      tripT += dt;
+      const dur = 0.85;
+      const p = Math.min(1, tripT/dur);
+      const ease = p*p; // accelerating toward the camera
+      if(charGroup){
+        const camX = CAM_TARGET.x+CAM_OFFSET.x, camY = CAM_TARGET.y+CAM_OFFSET.y, camZ = CAM_TARGET.z+CAM_OFFSET.z;
+        const startX = CHAR_X+slideDist-forwardProgress, startY = 0.6, startZ = 0;
+        charGroup.position.x = startX + (camX-startX)*ease;
+        charGroup.position.y = startY + (camY-startY)*ease;
+        charGroup.position.z = startZ + (camZ-startZ)*ease;
+        charGroup.rotation.x = p*Math.PI*4.2;   // wild tumbling, flying right at the viewer
+        charGroup.rotation.z = p*Math.PI*3.3;
+      }
+      if(p>=0.88 && shakeT<0.05){
+        shakeT = 0.4; // impact shake right before he hits the camera
+        const crack = document.getElementById('crackOverlay');
+        crack.classList.remove('show');
+        void crack.offsetWidth;
+        crack.classList.add('show');
+      }
+      if(p>=1){ endGame(true); }
+      return;
+    }
+    if(state!=='playing') return;
+
+    if(reloading){ updateReloadSequence(dt); return; }
+    if(currentRollRadius() <= 0.421){ startReload(); return; }
+
+    timeLeft -= dt;
+    if(timeLeft<=0){ timeLeft=0; updateHUD(); endGame(false); return; }
+
+    slideDist += SLIDE_RATE*dt;
+    if(slideDist>=SLIDE_FAIL){ startFail(); return; }
+
+    // once he's really flying, he starts running up the paper toward the
+    // roll — capped well short of the holder so he never reaches it
+    const FORWARD_MAX = 4.5, FORWARD_THRESHOLD = 0.72;
+    const speedFracNow = paperSpeed/MAX_SPEED;
+    const targetForward = speedFracNow > FORWARD_THRESHOLD
+      ? Math.min(FORWARD_MAX, (speedFracNow-FORWARD_THRESHOLD)/(1-FORWARD_THRESHOLD)*FORWARD_MAX)
+      : 0;
+    forwardProgress += (targetForward-forwardProgress)*Math.min(1, dt*3.2);
+
+    paperSpeed -= paperSpeed*FRICTION*dt;
+    if(paperSpeed<0) paperSpeed=0;
+    if(paperSpeed>MAX_SPEED) paperSpeed=MAX_SPEED;
+
+    const distance = paperSpeed*dt;
+    score += distance*0.6;
+    rollScore += distance*0.6;
+    paperOffset += distance;
+    legPhase += dt*(3+paperSpeed*3.2);
+
+    if(jumping){
+      charY += charVY*dt;
+      charVY -= GRAVITY*dt;
+      if(charY<=0){ charY=0; charVY=0; jumping=false; }
+    }
+
+    const now = performance.now();
+    activeRipples = activeRipples.filter(r => (now-r.t0)/1000 < RIPPLE_LIFE);
+
+    updateHUD();
+  }
+
+  // ---------- Camera debug panel ----------
+  (function setupCamDebug(){
+    const toggleBtn = document.getElementById('camDebugToggle');
+    const panel = document.getElementById('camDebugPanel');
+    const readout = document.getElementById('camDebugReadout');
+    const sliders = {
+      camOX: { obj:CAM_OFFSET, key:'x' },
+      camOY: { obj:CAM_OFFSET, key:'y' },
+      camOZ: { obj:CAM_OFFSET, key:'z' },
+      camTY: { obj:CAM_TARGET, key:'y' },
+      camTZ: { obj:CAM_TARGET, key:'z' },
+    };
+    function updateReadout(){
+      readout.textContent =
+        `CAM_TARGET(${(CHAR_X-1.5).toFixed(1)}, ${CAM_TARGET.y.toFixed(2)}, ${CAM_TARGET.z.toFixed(2)})\n`+
+        `CAM_OFFSET(${(CAM_OFFSET.x*camZoom).toFixed(2)}, ${(CAM_OFFSET.y*camZoom).toFixed(2)}, ${(CAM_OFFSET.z*camZoom).toFixed(2)})  [zoom x${camZoom.toFixed(2)} of base ${CAM_OFFSET.x.toFixed(2)},${CAM_OFFSET.y.toFixed(2)},${CAM_OFFSET.z.toFixed(2)}]\n`+
+        `CHAR_X offset: ${charDebugX.toFixed(2)}, Y: ${charDebugY.toFixed(2)}, Z: ${charDebugZ.toFixed(2)}\n`+
+        `HOLDER_X: ${HOLDER_X.toFixed(2)}, HOLDER_Y_OFF: ${HOLDER_Y_OFF.toFixed(2)}\n`+
+        `JUMP_DUR: ${RELOAD_JUMP_DUR.toFixed(2)}, JUMP_ARC: ${RELOAD_JUMP_ARC.toFixed(2)}`;
+    }
+    for(const id in sliders){
+      const el = document.getElementById(id);
+      const valEl = document.getElementById(id+'val');
+      const { obj, key } = sliders[id];
+      el.value = obj[key];
+      valEl.textContent = obj[key].toFixed(1);
+      el.addEventListener('input', ()=>{
+        obj[key] = parseFloat(el.value);
+        valEl.textContent = obj[key].toFixed(1);
+        updateReadout();
+        if(typeof render3D==='function') render3D(0);
+      });
+    }
+    const zoomEl = document.getElementById('camZoom');
+    const zoomVal = document.getElementById('camZoomval');
+    zoomEl.value = camZoom;
+    zoomVal.textContent = camZoom.toFixed(2);
+    zoomEl.addEventListener('input', ()=>{
+      camZoom = parseFloat(zoomEl.value);
+      zoomVal.textContent = camZoom.toFixed(2);
+      updateReadout();
+      if(typeof render3D==='function') render3D(0);
+    });
+    const charXEl = document.getElementById('charX');
+    const charXVal = document.getElementById('charXval');
+    charXEl.value = charDebugX;
+    charXVal.textContent = charDebugX.toFixed(1);
+    charXEl.addEventListener('input', ()=>{
+      charDebugX = parseFloat(charXEl.value);
+      charXVal.textContent = charDebugX.toFixed(1);
+      updateReadout();
+      if(charGroup) charGroup.position.x = CHAR_X + slideDist - forwardProgress + charDebugX;
+      if(typeof render3D==='function') render3D(0);
+    });
+    const charYEl = document.getElementById('charY');
+    const charYVal = document.getElementById('charYval');
+    charYEl.value = charDebugY;
+    charYVal.textContent = charDebugY.toFixed(1);
+    charYEl.addEventListener('input', ()=>{
+      charDebugY = parseFloat(charYEl.value);
+      charYVal.textContent = charDebugY.toFixed(1);
+      updateReadout();
+      if(charGroup) charGroup.position.y = charDebugY;
+      if(typeof render3D==='function') render3D(0);
+    });
+    const charZEl = document.getElementById('charZ');
+    const charZVal = document.getElementById('charZval');
+    charZEl.value = charDebugZ;
+    charZVal.textContent = charDebugZ.toFixed(1);
+    charZEl.addEventListener('input', ()=>{
+      charDebugZ = parseFloat(charZEl.value);
+      charZVal.textContent = charDebugZ.toFixed(1);
+      updateReadout();
+      if(charGroup) charGroup.position.z = charDebugZ;
+      if(typeof render3D==='function') render3D(0);
+    });
+
+    const holderSliders = {
+      holderX: { get:()=>HOLDER_X, set:v=>HOLDER_X=v },
+      holderY: { get:()=>HOLDER_Y_OFF, set:v=>HOLDER_Y_OFF=v },
+      jumpDur: { get:()=>RELOAD_JUMP_DUR, set:v=>RELOAD_JUMP_DUR=v },
+      jumpArc: { get:()=>RELOAD_JUMP_ARC, set:v=>RELOAD_JUMP_ARC=v },
+    };
+    for(const id in holderSliders){
+      const el = document.getElementById(id);
+      const valEl = document.getElementById(id+'val');
+      const { get, set } = holderSliders[id];
+      el.value = get();
+      valEl.textContent = get().toFixed(2);
+      el.addEventListener('input', ()=>{
+        set(parseFloat(el.value));
+        valEl.textContent = get().toFixed(2);
+        updateReadout();
+      });
+    }
+    document.getElementById('testReloadBtn').addEventListener('click', ()=>{
+      if(state!=='playing'){
+        startOverlay.classList.add('hidden');
+        endOverlay.classList.add('hidden');
+        reset(); state='playing'; lastTS=null;
+        requestAnimationFrame(loop);
+      }
+      if(!reloading) startReload();
+    });
+
+    updateReadout();
+    toggleBtn.addEventListener('click', ()=>{ panel.classList.toggle('open'); });
+  })();
+
+  // ---------- Boot ----------
+  init3D();
+  reset();
+  render3D(0);
+})();
+</script>
+</body>
+</html>

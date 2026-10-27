@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>目玉つみ - ゲーム＆ウォッチ風</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --lcd: #e9dfc0;
+    --ink: #211a10;
+    --shell: #c81324;
+    --shell-light: #e8283c;
+    --shell-dark: #8a0d18;
+    --steel: #8a8378;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  html, body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background: radial-gradient(ellipse at 50% 20%, #3a2c22, #150f0a 70%);
+    font-family: 'Yu Gothic', 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+  }
+  body{
+    display:flex; align-items:center; justify-content:center;
+    height: 100vh; height: 100dvh;
+    padding: 10px;
+  }
+
+  #device{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(94vw, 380px);
+    height: min(96vh, 96dvh, 780px);
+    background: linear-gradient(160deg, var(--shell-light), var(--shell) 45%, var(--shell-dark));
+    border-radius: 26px;
+    padding: 14px 14px 12px;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.55), inset 0 2px 3px rgba(255,255,255,0.25), inset 0 -6px 14px rgba(0,0,0,0.25);
+  }
+  .device-header{
+    flex: 0 0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 2px 6px 8px;
+  }
+  .brand{
+    color: rgba(255,240,230,0.85);
+    font-family: 'DotGothic16', 'Courier New', monospace;
+    font-weight: 800; font-size: 15px; letter-spacing: 1px;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+  .brand small{ font-weight:600; opacity:0.8; letter-spacing:1px; }
+  .power-dot{
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #ffd23a;
+    box-shadow: 0 0 5px 1px rgba(255,210,58,0.8), inset 0 -1px 1px rgba(0,0,0,0.3);
+  }
+
+  .screen-bezel{
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    background: linear-gradient(160deg, #2a2018, #14100b);
+    border-radius: 16px;
+    padding: 12px 10px;
+    box-shadow: inset 0 4px 12px rgba(0,0,0,0.7), inset 0 -2px 4px rgba(255,255,255,0.05);
+  }
+
+  #stage{
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    margin: 0 auto;
+    background: var(--lcd);
+    overflow: hidden;
+    touch-action: none;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 2px rgba(33,26,16,0.4);
+  }
+  /* faint scanline texture over the LCD glass for authenticity */
+  #stage::after{
+    content:'';
+    position:absolute; inset:0; pointer-events:none; z-index:8;
+    background: repeating-linear-gradient(0deg, rgba(33,26,16,0.05) 0px, rgba(33,26,16,0.05) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: multiply;
+  }
+  canvas{
+    display:block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #hud{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding: 12px 14px;
+    pointer-events:none;
+    z-index: 5;
+  }
+  #score{
+    color: var(--ink);
+    font-family: 'DotGothic16', 'Courier New', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+  #lives{ display:flex; gap:6px; }
+  .life{
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--ink);
+  }
+  .life.lost{ background: transparent; border-color: rgba(33,26,16,0.35); }
+
+  #combo{
+    position:absolute;
+    top: 92px; left: 0; right:0;
+    text-align:center;
+    color: var(--ink);
+    font-family: 'DotGothic16', 'Courier New', monospace;
+    font-size: 20px;
+    letter-spacing: 2px;
+    font-weight:800;
+    opacity: 1;
+    pointer-events:none;
+    z-index:5;
+  }
+
+  #controls{
+    flex: 0 0 auto;
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 12px 14px 2px;
+  }
+  .ctrl-group{
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+  }
+  #dpad{
+    position: relative;
+    width: 128px; height: 128px;
+  }
+  .dbtn{
+    position: absolute;
+    background: #2a2018;
+    border: 1px solid rgba(0,0,0,0.5);
+    box-shadow: 0 4px 0 rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.15);
+    color: var(--lcd);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 22px;
+  }
+  .dbtn:active{ transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.5); }
+  #leftBtn{ left:0; top:36px; width:52px; height:56px; border-radius:10px 3px 3px 10px; }
+  #rightBtn{ right:0; top:36px; width:52px; height:56px; border-radius:3px 10px 10px 3px; }
+  #jumpBtn{
+    width: 68px; height: 68px; border-radius: 50%;
+    background: #e6533a;
+    border: 2px solid rgba(255,240,230,0.85);
+    box-shadow: 0 5px 0 #6e1c10, inset 0 1px 2px rgba(255,255,255,0.35);
+    color: #fff0e8;
+    font-size: 14px; font-weight:800; letter-spacing:1px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #jumpBtn:active{ transform: translateY(4px); box-shadow: 0 1px 0 #6e1c10; }
+
+  .device-footer{
+    flex: 0 0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 8px 10px 0;
+  }
+  .speaker{ display:flex; gap:4px; }
+  .speaker span{
+    width:4px; height:4px; border-radius:50%;
+    background: rgba(0,0,0,0.35);
+  }
+  .footer-brand{
+    color: rgba(255,240,230,0.55);
+    font-size: 9px; letter-spacing: 1px; font-weight:700;
+  }
+
+  #overlay{
+    position:absolute; inset:0;
+    background: rgba(233,223,192,0.96);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    color: var(--ink);
+    padding: 26px;
+    z-index: 10;
+  }
+  #startPanel, #gameOverPanel{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  #overlay h1{
+    font-size: 26px; margin: 0 0 6px;
+    letter-spacing: 2px;
+    font-family: 'DotGothic16', 'Courier New', monospace;
+  }
+  #overlay .sub{
+    font-size: 12px; color: rgba(33,26,16,0.75);
+    margin-bottom: 20px; line-height: 1.8;
+  }
+  #overlay .bigEye{ margin-bottom: 16px; }
+  #startBtn, #restartBtn{
+    background: var(--shell);
+    color: #fff0e8;
+    border: 2px solid var(--ink);
+    padding: 11px 32px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 4px;
+    letter-spacing: 2px;
+    font-family: 'DotGothic16', 'Courier New', monospace;
+  }
+  #startBtn:active, #restartBtn:active{ transform: scale(0.96); }
+
+  #gameOverCanvas{
+    width: 160px; height: 206px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    margin-bottom: 10px;
+  }
+  #gameOverTitle{
+    font-size: 22px;
+    margin: 0 0 8px;
+    letter-spacing: 3px;
+  }
+  #finalScore{
+    font-size: 18px;
+    margin-bottom: 18px;
+    color: var(--ink);
+    font-family: 'DotGothic16', 'Courier New', monospace;
+    letter-spacing: 1px;
+  }
+  #restartBtn{
+    font-size: 22px;
+    padding: 10px 26px;
+    line-height: 1;
+  }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+<div id="device">
+  <div class="device-header">
+    <div class="brand">ふたつめにんげん</div>
+    <div class="power-dot"></div>
+  </div>
+
+  <div class="screen-bezel">
+    <div id="stage">
+      <canvas id="game"></canvas>
+
+      <div id="hud">
+        <div id="score">0</div>
+        <div id="lives">
+          <div class="life"></div>
+          <div class="life"></div>
+          <div class="life"></div>
+        </div>
+      </div>
+      <div id="combo"></div>
+
+      <div id="overlay">
+        <div id="startPanel">
+          <svg class="bigEye" width="80" height="80" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="34" fill="#e9dfc0" stroke="#211a10" stroke-width="5"/>
+            <circle cx="40" cy="40" r="16" fill="#211a10"/>
+            <circle cx="34" cy="34" r="4" fill="#e9dfc0"/>
+          </svg>
+          <h1 id="overlayTitle">目玉つみ</h1>
+          <div class="sub" id="overlaySub">
+            操作：下の◀▶ボタンで左右移動、JUMPボタンでジャンプ<br>
+            （PCなら矢印キーとスペースキーでも操作可）<br><br>
+            上の卵が割れて、目玉や目玉焼きが降ってくる。<br>
+            ひとつめ骸骨の頭で受けとめろ。5つ積み重ねるたびに<br>
+            頭の目玉がじわりと大きくなる。<br>
+            スマホを見ながら歩いてくる男にはジャンプでよける。<br>
+            まれに現れるから傘お化けにはぶつかると、目玉の大雨タイム。
+          </div>
+          <div id="startBtn">はじめる</div>
+        </div>
+
+        <div id="gameOverPanel" class="hidden">
+          <canvas id="gameOverCanvas" width="76" height="98"></canvas>
+          <h1 id="gameOverTitle">GAME OVER</h1>
+          <div id="finalScore"></div>
+          <div id="restartBtn">↻</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div class="ctrl-group">
+      <div id="dpad">
+        <div class="dbtn" id="leftBtn">◀</div>
+        <div class="dbtn" id="rightBtn">▶</div>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <div id="jumpBtn"></div>
+    </div>
+  </div>
+
+  <div class="device-footer">
+    <div class="speaker">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+    </div>
+    <div class="footer-brand">FUTATSUME NINGEN</div>
+  </div>
+</div>
+
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const realCtx = canvas.getContext('2d');
+  let ctx = realCtx;
+
+  // ---- pixel-art rendering: draw the exact same scene into a small buffer, then
+  // blit it up with nearest-neighbor scaling so every shape reads as chunky dot-art ----
+  const PIXEL_SCALE = 4;
+  const pixelBuffer = document.createElement('canvas');
+  const bufferCtx = pixelBuffer.getContext('2d');
+
+  const COL = {
+    red: '#7a2e1c',
+    redBright: '#93402a',
+    redDark: '#5c2015',
+    black: '#211a10',
+    white: '#e9dfc0',
+    bone: '#211a10',
+    boneRim: '#120d08',
+    yolk: '#7a2e1c',
+    yolkDark: '#5c2015'
+  };
+
+  
+  // ---- internal resolution ----
+  const W = 400, H = 700;
+  canvas.width = W; canvas.height = H;
+  pixelBuffer.width = Math.round(W/PIXEL_SCALE);
+  pixelBuffer.height = Math.round(H/PIXEL_SCALE);
+
+  // ---- game state ----
+  const groundY = H - 110;
+  const player = {
+    x: W/2, y: groundY, w: 66, h: 86,
+    vy: 0, speed: 4.6,
+    jumping: false, jumpV: 0,
+    walkPhase: 0,
+    headR: 26
+  };
+  const GRAVITY_VAL = 0.85;
+  const JUMP_FORCE = -16;
+  const HEAD_R_BASE = 26;
+  const HEAD_R_STEP = 5;
+  const HEAD_R_MAX = 68;
+  const EYE_R_NORMAL = 22; // falling eyeballs always stay this size
+  const STACK_EYE_R = 22;  // caught eyes waiting above the head use the same size, so nothing overlaps
+  const NECK_LEN = 10;     // fixed, normal neck length - does not stretch as the head grows
+  const SHOULDER_Y = player.h*0.42;
+
+  // the head's center-y, anchored so the neck stays a constant (normal) length
+  // no matter how big headR gets - the head grows upward/outward from a fixed neck join
+  function headCenterY(){
+    return player.y - player.h + SHOULDER_Y - NECK_LEN - player.headR;
+  }
+
+  // returns the center-y for the (index)-th eye stacked above the head, guaranteeing no overlap
+  function stackSlotY(index){
+    let y = headCenterY();
+    let r = player.headR;
+    for(let i=0;i<=index;i++){
+      y = y - (r + STACK_EYE_R + 5);
+      r = STACK_EYE_R;
+    }
+    return y;
+  }
+
+  let items = [];       // falling items
+  let stack = [];         // the one eye currently caught, waiting to merge into the head eye
+  let comboCount = 1;     // starts at 1: the head's own original eye counts as 1
+  let growthLevel = 0;    // how many times the original head eye has grown
+  let score = 0;
+  let lives = 3;
+  let spawnTimer = 0;
+  let spawnInterval = 72;
+  let fallSpeedBase = 2.5;
+  let human = null;
+  let humanTimer = 150;
+  let particles = [];
+  let rings = [];
+  let flashTimer = 0;
+  let growFlashTimer = 0;
+  let feverTimer = 0;
+  let comboMsgTimer = 0;
+  let comboMsgText = '';
+  let running = false;
+  let gameOver = false;
+  let frame = 0;
+  let eggCrackTimer = 0;
+  let eggCrackType = 'eye';
+  let eggX = W/2;
+  let eggVX = 1.4;
+  let crowd = [];
+  let hitodama = [];
+  let kasaObake = null;
+  let kasaObakeTimer = 900 + Math.random()*900;
+  let specialModeTimer = 0;
+  let dancing = false;
+  let danceT = 0;
+  let finalHeadR = HEAD_R_BASE;
+
+  const scoreEl = document.getElementById('score');
+  const livesWrap = document.getElementById('lives');
+  const comboEl = document.getElementById('combo');
+  const overlay = document.getElementById('overlay');
+  const startPanel = document.getElementById('startPanel');
+  const gameOverPanel = document.getElementById('gameOverPanel');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const goCanvas = document.getElementById('gameOverCanvas');
+  const goCtx = goCanvas.getContext('2d');
+  const finalScoreEl = document.getElementById('finalScore');
+  function updateLivesUI(){
+    [...livesWrap.children].forEach((el, i)=>{
+      el.classList.toggle('lost', i >= lives);
+    });
+  }
+
+  function genCrowd(){
+    crowd = [];
+    const n = 30;
+    for(let i=0;i<n;i++){
+      crowd.push({
+        x: 12 + Math.random()*(W-24),
+        y: 120 + Math.random()*(groundY-160),
+        scale: 0.75 + Math.random()*1.1,
+        seed: Math.random()*100,
+        opacity: 0.26 + Math.random()*0.34,
+        vx: (Math.random()-0.5)*0.7,
+        vy: (Math.random()-0.5)*0.35,
+        phase: Math.random()*10,
+        phaseSpeed: 0.1 + Math.random()*0.08
+      });
+    }
+  }
+
+  function genHitodama(){
+    hitodama = [];
+    const n = 6;
+    for(let i=0;i<n;i++){
+      hitodama.push({
+        x: 16 + Math.random()*(W-32),
+        y: 130 + Math.random()*(groundY-220),
+        seed: Math.random()*100,
+        speed: 0.5 + Math.random()*0.5,
+        scale: 0.7 + Math.random()*0.6
+      });
+    }
+  }
+
+  function resetGame(){
+    player.x = W/2; player.y = groundY; player.vy=0; player.jumping=false;
+    player.headR = HEAD_R_BASE;
+    items = []; stack = []; particles = []; rings = [];
+    comboCount = 1; score = 0; lives = 3; growthLevel = 0;
+    spawnTimer = 0; spawnInterval = 72; fallSpeedBase = 2.5;
+    human = null; humanTimer = 150;
+    kasaObake = null; kasaObakeTimer = 900 + Math.random()*900; specialModeTimer = 0;
+    flashTimer = 0; growFlashTimer = 0; comboMsgTimer = 0; feverTimer = 0;
+    gameOver = false; frame = 0; eggCrackTimer = 0;
+    eggX = W/2; eggVX = 1.4;
+    genCrowd();
+    genHitodama();
+    updateLivesUI();
+    scoreEl.textContent = '0';
+    comboEl.textContent = '';
+  }
+  genCrowd();
+  genHitodama();
+
+  // ---- input ----
+  const keys = {};
+  window.addEventListener('keydown', e=>{
+    keys[e.key] = true;
+    if((e.key===' '||e.key==='ArrowUp')) doJump();
+  });
+  window.addEventListener('keyup', e=>{ keys[e.key]=false; });
+
+  let moveLeft = false, moveRight = false;
+  const leftBtn = document.getElementById('leftBtn');
+  const rightBtn = document.getElementById('rightBtn');
+  const jumpBtn = document.getElementById('jumpBtn');
+
+  function bindHold(el, onDown, onUp){
+    el.addEventListener('pointerdown', e=>{ e.preventDefault(); onDown(); });
+    el.addEventListener('pointerup', e=>{ e.preventDefault(); onUp(); });
+    el.addEventListener('pointerleave', e=>{ onUp(); });
+    el.addEventListener('pointercancel', e=>{ onUp(); });
+  }
+  bindHold(leftBtn, ()=>moveLeft=true, ()=>moveLeft=false);
+  bindHold(rightBtn, ()=>moveRight=true, ()=>moveRight=false);
+  jumpBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); doJump(); });
+
+  function doJump(){
+    if(!running || gameOver) return;
+    if(!player.jumping){
+      player.jumping = true;
+      player.jumpV = JUMP_FORCE;
+      burstPsychedelic(player.x, player.y-4, 8, 2.2, [180,300]);
+    }
+  }
+
+  function startGame(){
+    dancing = false;
+    resetGame();
+    overlay.classList.add('hidden');
+    running = true;
+  }
+  startBtn.addEventListener('click', startGame);
+  restartBtn.addEventListener('click', startGame);
+
+  // ---- spawning ----
+  function spawnItem(){
+    const isWeird = specialModeTimer>0 ? false : Math.random() < 0.22;
+    items.push({
+      x: eggX,
+      y: 46,
+      r: isWeird ? 22 : EYE_R_NORMAL,
+      vy: fallSpeedBase + Math.random()*1.2,
+      type: isWeird ? 'egg' : 'eye',
+      wobble: Math.random()*Math.PI*2
+    });
+    eggCrackType = isWeird ? 'egg' : 'eye';
+    eggCrackTimer = EGG_CRACK_DURATION;
+  }
+
+  function spawnHuman(){
+    const fromLeft = Math.random() < 0.5;
+    human = {
+      x: fromLeft ? -40 : W+40,
+      y: groundY,
+      w: 34, h: 78,
+      vx: fromLeft ? 3.0 : -3.0,
+      phase: Math.random()*10
+    };
+  }
+
+  function spawnKasaObake(){
+    const fromLeft = Math.random() < 0.5;
+    kasaObake = {
+      x: fromLeft ? -40 : W+40,
+      y: groundY,
+      w: 40, h: 72,
+      vx: fromLeft ? 2.0 : -2.0,
+      phase: Math.random()*10
+    };
+  }
+
+  // ---- particles & psychedelic effects ----
+  function burst(x,y,color,n){
+    n = n || 16;
+    for(let i=0;i<n;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = 1.8 + Math.random()*3.6;
+      particles.push({x,y,vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:34, maxLife:34, color, psy:false});
+    }
+  }
+
+  function burstPsychedelic(x,y,n,speed,hueRange,redMode){
+    n = n || 20;
+    speed = speed || 3;
+    hueRange = hueRange || [0,360];
+    for(let i=0;i<n;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = speed*0.5 + Math.random()*speed;
+      const life = 34 + Math.random()*24;
+      particles.push({
+        x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        life, maxLife:life,
+        hue: hueRange[0] + Math.random()*(hueRange[1]-hueRange[0]),
+        spin: (Math.random()-0.5)*0.35,
+        psy:true, red: !!redMode
+      });
+    }
+  }
+
+  function addRing(x,y,hueBase,dark,red,startR){
+    rings.push({x,y,r:startR||8,hueBase: hueBase===undefined ? Math.random()*360 : hueBase, life:32, maxLife:32, dark: !!dark, red: !!red});
+  }
+
+  // the original head eye grows a little each time
+  function growOriginalEye(){
+    growthLevel = Math.min(growthLevel+1, 8);
+    player.headR = Math.min(HEAD_R_BASE + growthLevel*HEAD_R_STEP, HEAD_R_MAX);
+    const hcy = headCenterY();
+    burstPsychedelic(player.x, hcy, 36, 4.5);
+    addRing(player.x, hcy, 0);
+    addRing(player.x, hcy, 140);
+    growFlashTimer = 34;
+    feverTimer = 105;
+    burstPsychedelic(W/2, H*0.4, 40, 6);
+  }
+
+  // ---- update ----
+  function update(){
+    frame++;
+
+    // movement
+    let dir = 0;
+    if(keys['ArrowLeft']||keys['a']||moveLeft) dir -= 1;
+    if(keys['ArrowRight']||keys['d']||moveRight) dir += 1;
+    player.x += dir * player.speed;
+    player.x = Math.max(40, Math.min(W-40, player.x));
+    player.walkPhase += Math.abs(dir) * 0.25;
+
+    // jump physics
+    if(player.jumping){
+      player.y += player.jumpV;
+      player.jumpV += GRAVITY_VAL;
+      if(player.y >= groundY){
+        player.y = groundY;
+        player.jumping = false;
+        player.jumpV = 0;
+      }
+    }
+
+    // background crowd wanders around slowly
+    for(const c of crowd){
+      c.x += c.vx;
+      c.y += c.vy;
+      if(c.x < 12 || c.x > W-12) c.vx *= -1;
+      if(c.y < 110 || c.y > groundY-140) c.vy *= -1;
+      if(Math.random() < 0.01) c.vx += (Math.random()-0.5)*0.4;
+      if(Math.random() < 0.01) c.vy += (Math.random()-0.5)*0.2;
+      c.vx = Math.max(-0.9, Math.min(0.9, c.vx));
+      c.vy = Math.max(-0.5, Math.min(0.5, c.vy));
+      c.phase += c.phaseSpeed;
+    }
+
+    // the egg at the top patrols left/right
+    eggX += eggVX;
+    if(eggX < 60 || eggX > W-60) eggVX *= -1;
+
+    // difficulty ramp
+    if(frame % 500 === 0){
+      fallSpeedBase = Math.min(fallSpeedBase + 0.35, 6.8);
+      spawnInterval = Math.max(spawnInterval - 5, 36);
+    }
+
+    // spawn falling items (from the egg at the top)
+    spawnTimer++;
+    const effectiveSpawnInterval = specialModeTimer>0 ? 9 : spawnInterval;
+    if(spawnTimer >= effectiveSpawnInterval){
+      spawnTimer = 0;
+      spawnItem();
+    }
+    if(eggCrackTimer>0) eggCrackTimer--;
+    if(feverTimer>0) feverTimer--;
+    if(specialModeTimer>0) specialModeTimer--;
+
+    // hitodama spirit flames drift gently around the background
+    for(const f of hitodama){
+      f.x += Math.sin(frame*0.02 + f.seed) * 0.4;
+      f.y += Math.cos(frame*0.015 + f.seed) * 0.25;
+      f.x = Math.max(10, Math.min(W-10, f.x));
+      f.y = Math.max(110, Math.min(groundY-30, f.y));
+    }
+
+    // update items
+    for(let i=items.length-1;i>=0;i--){
+      const it = items[i];
+      it.y += it.vy;
+      it.wobble += 0.08;
+      it.x += Math.sin(it.wobble)*0.4;
+
+      const catchY = stackSlotY(stack.length);
+      if(it.y > catchY - it.r*0.9 && it.y < catchY + it.r*1.1 &&
+         Math.abs(it.x - player.x) < it.r + 16){
+        if(it.type === 'eye'){
+          comboCount++;
+          score += 10;
+          if(comboCount >= 6){
+            stack = [];
+            score += 50;
+            comboCount = 1;
+            growOriginalEye();
+          } else {
+            stack.push({type:'eye'});
+            burstPsychedelic(it.x, it.y, 14, 2.6);
+            addRing(it.x, it.y, undefined);
+          }
+        } else {
+          lives = Math.max(0, lives-1);
+          updateLivesUI();
+          flashTimer = 12;
+          burstPsychedelic(it.x, it.y, 18, 3.2, [340, 380]);
+          addRing(it.x, it.y, 350, true);
+          if(lives<=0){ triggerGameOver(); }
+        }
+        scoreEl.textContent = score;
+        items.splice(i,1);
+        continue;
+      }
+
+      if(it.y > H+40){
+        items.splice(i,1);
+      }
+    }
+
+    // human obstacle
+    humanTimer--;
+    if(!human && humanTimer<=0){
+      spawnHuman();
+    }
+    if(human){
+      human.x += human.vx;
+      human.phase += 0.3;
+      const overlapX = Math.abs(human.x - player.x) < (human.w/2 + player.w/2 - 8);
+      const playerAirborne = player.jumping && (groundY - player.y) > 44;
+      if(overlapX && !playerAirborne){
+        human = null;
+        humanTimer = 160 + Math.random()*110;
+        lives = Math.max(0, lives-1);
+        updateLivesUI();
+        flashTimer = 16;
+        burstPsychedelic(player.x, player.y-40, 30, 4, [330,380]);
+        addRing(player.x, player.y-40, 350, true);
+        if(lives<=0){ triggerGameOver(); }
+      } else if(human && (human.x < -50 || human.x > W+50)){
+        human = null;
+        humanTimer = 160 + Math.random()*140;
+        score += 5;
+        scoreEl.textContent = score;
+      }
+    }
+
+    // kasa-obake: rare, fast, floating bonus obstacle - colliding with it is a good thing
+    kasaObakeTimer--;
+    if(!kasaObake && kasaObakeTimer<=0){
+      spawnKasaObake();
+    }
+    if(kasaObake){
+      kasaObake.x += kasaObake.vx;
+      kasaObake.phase += 0.22;
+      const overlapX = Math.abs(kasaObake.x - player.x) < (kasaObake.w/2 + player.w/2 - 6);
+      const playerAirborne = player.jumping && (groundY - player.y) > 44;
+      if(overlapX && !playerAirborne){
+        kasaObake = null;
+        kasaObakeTimer = 1400 + Math.random()*1600;
+        specialModeTimer = 480;
+        growFlashTimer = 90;
+        burstPsychedelic(player.x, player.y-60, 90, 7, [0,360], true);
+        burstPsychedelic(player.x, player.y-60, 40, 3, [0,360], false);
+        addRing(player.x, player.y-60, 0, false, true, 6);
+        addRing(player.x, player.y-60, 0, false, true, 20);
+        addRing(player.x, player.y-60, 0, false, true, 36);
+        addRing(player.x, player.y-60, 0, false, false, 12);
+      } else if(kasaObake && (kasaObake.x < -60 || kasaObake.x > W+60)){
+        kasaObake = null;
+        kasaObakeTimer = 1400 + Math.random()*1600;
+      }
+    }
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      if(p.psy && p.spin){
+        const c = Math.cos(p.spin), s = Math.sin(p.spin);
+        const nvx = p.vx*c - p.vy*s;
+        const nvy = p.vx*s + p.vy*c;
+        p.vx = nvx; p.vy = nvy;
+      }
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life--;
+      if(p.life<=0) particles.splice(i,1);
+    }
+
+    // rings
+    for(let i=rings.length-1;i>=0;i--){
+      const r = rings[i];
+      r.r += 6.5;
+      r.life--;
+      if(r.life<=0) rings.splice(i,1);
+    }
+
+    if(flashTimer>0) flashTimer--;
+    if(growFlashTimer>0) growFlashTimer--;
+    if(comboMsgTimer>0){
+      comboMsgTimer--;
+      comboEl.textContent = comboMsgText;
+      comboEl.style.opacity = Math.min(1, comboMsgTimer/20);
+    } else {
+      comboEl.textContent = '';
+    }
+  }
+
+  function triggerGameOver(){
+    gameOver = true;
+    running = false;
+    finalHeadR = player.headR;
+    finalScoreEl.textContent = score;
+    startPanel.classList.add('hidden');
+    gameOverPanel.classList.remove('hidden');
+    overlay.classList.remove('hidden');
+    dancing = true;
+    danceT = 0;
+    danceLoop();
+  }
+
+  // dedicated small render loop for the GAME OVER hero dance - independent of the main game loop
+  function danceLoop(){
+    if(!dancing) return;
+    danceT += 0.045;
+
+    ctx = goCtx;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,goCanvas.width, goCanvas.height);
+    ctx.fillStyle = COL.white;
+    ctx.fillRect(0,0,goCanvas.width, goCanvas.height);
+
+    // fixed conservative scale so the character (including a large grown head) fits the frame
+    const scale = 0.5;
+    ctx.save();
+    ctx.translate(goCanvas.width/2, goCanvas.height - 6);
+    ctx.scale(scale, scale);
+    drawDanceHero(0, 0, 86, finalHeadR, danceT);
+    ctx.restore();
+
+    requestAnimationFrame(danceLoop);
+  }
+
+  // ---- drawing ----
+  function drawBackground(){
+    // flat LCD screen color - no gradients, this is a printed/molded background, not lit
+    ctx.fillStyle = COL.white;
+    ctx.fillRect(0,0,W,H);
+
+    // faint fixed dot-grid, like the printed texture on an old LCD backing
+    ctx.save();
+    ctx.globalAlpha = 0.10;
+    ctx.fillStyle = COL.black;
+    const spacing = 16;
+    for(let yy=spacing/2; yy<H; yy+=spacing){
+      const rowOffset = ((yy/spacing)%2===0) ? 0 : spacing/2;
+      for(let xx=spacing/2+rowOffset; xx<W; xx+=spacing){
+        ctx.beginPath();
+        ctx.arc(xx,yy,1.4,0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // a simple fixed decorative disc, printed on the backing like classic LCD art
+    ctx.save();
+    ctx.globalAlpha = 0.14;
+    ctx.beginPath();
+    ctx.arc(W*0.8, 92, 40, 0, Math.PI*2);
+    ctx.strokeStyle = COL.black;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+
+    // crowd of watching silhouettes, staring out at the player
+    for(const c of crowd){
+      drawWatcher(c);
+    }
+
+    // hitodama spirit flames drifting among the crowd
+    for(const f of hitodama){
+      drawHitodama(f);
+    }
+
+    ctx.fillStyle = COL.black;
+    ctx.fillRect(0, groundY+8, W, 4);
+  }
+
+  function drawHitodama(f){
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.scale(f.scale, f.scale);
+    const flicker = 0.6 + 0.4*Math.sin(frame*0.15 + f.seed);
+    ctx.globalAlpha = 0.55 + flicker*0.25;
+    // teardrop flame shape
+    ctx.beginPath();
+    ctx.moveTo(0, -14 - flicker*3);
+    ctx.quadraticCurveTo(9, -4, 7, 6);
+    ctx.quadraticCurveTo(4, 13, 0, 13);
+    ctx.quadraticCurveTo(-4, 13, -7, 6);
+    ctx.quadraticCurveTo(-9, -4, 0, -14 - flicker*3);
+    ctx.closePath();
+    ctx.fillStyle = COL.black;
+    ctx.fill();
+    // faint inner glow ring, flat/no gradient - just a lighter ring
+    ctx.globalAlpha = 0.35 + flicker*0.2;
+    ctx.beginPath();
+    ctx.arc(0, 3, 3.2, 0, Math.PI*2);
+    ctx.fillStyle = COL.white;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawWatcher(c){
+    ctx.save();
+    ctx.globalAlpha = c.opacity;
+    const sway = Math.sin(frame*0.012 + c.seed)*1.5;
+    ctx.translate(c.x + sway, c.y);
+    ctx.scale(c.scale, c.scale);
+    ctx.fillStyle = COL.black;
+    // tapered still body, standing and staring
+    ctx.beginPath();
+    ctx.moveTo(-11, -2);
+    ctx.lineTo(11, -2);
+    ctx.lineTo(7, 40);
+    ctx.lineTo(-7, 40);
+    ctx.closePath();
+    ctx.fill();
+    // head
+    ctx.beginPath();
+    ctx.arc(0,-14, 9, 0, Math.PI*2);
+    ctx.fill();
+    // glowing white eye, always facing the viewer
+    ctx.fillStyle = COL.white;
+    ctx.globalAlpha = c.opacity * (0.6 + 0.4*Math.sin(frame*0.05+c.seed));
+    ctx.beginPath(); ctx.arc(1,-15,1.8,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = c.opacity;
+    ctx.restore();
+  }
+
+  // an egg fixed at the top of the screen - the source the eyeballs (and fried eggs) fall from.
+  // it cracks open briefly every time a new item spawns, revealing what's inside.
+  const EGG_CRACK_DURATION = 32;
+  // fixed jagged crack line running across the egg's widest point (its "equator")
+  const EGG_CRACK = [[-18,8],[-11,3],[-4,11],[4,2],[11,10],[18,8]];
+
+  function eggOutlinePath(){
+    ctx.beginPath();
+    ctx.moveTo(-18,8);
+    ctx.bezierCurveTo(-20,-8, -10,-30, 0,-30);
+    ctx.bezierCurveTo(10,-30, 20,-8, 18,8);
+    ctx.bezierCurveTo(20,24, 10,34, 0,34);
+    ctx.bezierCurveTo(-10,34, -20,24, -18,8);
+    ctx.closePath();
+  }
+  function eggTopHalfPath(){
+    ctx.beginPath();
+    ctx.moveTo(-18,8);
+    ctx.bezierCurveTo(-20,-8, -10,-30, 0,-30);
+    ctx.bezierCurveTo(10,-30, 20,-8, 18,8);
+    for(let i=EGG_CRACK.length-2;i>=0;i--) ctx.lineTo(EGG_CRACK[i][0], EGG_CRACK[i][1]);
+    ctx.closePath();
+  }
+  function eggBottomHalfPath(){
+    ctx.beginPath();
+    ctx.moveTo(EGG_CRACK[0][0], EGG_CRACK[0][1]);
+    for(let i=1;i<EGG_CRACK.length;i++) ctx.lineTo(EGG_CRACK[i][0], EGG_CRACK[i][1]);
+    ctx.bezierCurveTo(20,24, 10,34, 0,34);
+    ctx.bezierCurveTo(-10,34, -20,24, -18,8);
+    ctx.closePath();
+  }
+  function eggShellStyle(){
+    ctx.fillStyle = COL.white;
+    ctx.strokeStyle = COL.black;
+    ctx.lineWidth = 3;
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(11,11,11,0.15)';
+    [[-9,-14],[8,-6],[-3,-22],[6,20],[-10,22]].forEach(p=>{
+      ctx.beginPath(); ctx.arc(p[0],p[1],1.7,0,Math.PI*2); ctx.fill();
+    });
+  }
+
+  function drawTopEgg(){
+    const cx = eggX, cy = 40;
+    const t = eggCrackTimer>0 ? eggCrackTimer/EGG_CRACK_DURATION : 0; // 1 just triggered -> 0 settled
+
+    ctx.save();
+    ctx.translate(cx,cy);
+
+    if(t<=0){
+      // idle - whole, uncracked egg
+      eggOutlinePath();
+      eggShellStyle();
+      ctx.restore();
+      return;
+    }
+
+    if(t > 0.55){
+      // stage 1: a hairline crack spreads across the shell, not yet split
+      eggOutlinePath();
+      eggShellStyle();
+      const crackProgress = 1 - (t-0.55)/0.45; // 0 -> 1 as this stage plays out
+      const visibleCount = Math.max(2, Math.round(EGG_CRACK.length*crackProgress));
+      ctx.beginPath();
+      ctx.moveTo(EGG_CRACK[0][0], EGG_CRACK[0][1]);
+      for(let i=1;i<visibleCount;i++) ctx.lineTo(EGG_CRACK[i][0], EGG_CRACK[i][1]);
+      ctx.strokeStyle = COL.black; ctx.lineWidth = 1.6;
+      ctx.stroke();
+    } else {
+      // stage 2: the shell bursts apart along the crack, revealing what's inside
+      const p = 1 - t/0.55; // 0 -> 1
+      const gap = p*15;
+
+      // content peeking through the gap, drawn first so the shell halves sit above it
+      ctx.save();
+      ctx.translate(0, 8);
+      const s = Math.min(1, p*1.6);
+      ctx.scale(s,s);
+      ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2);
+      ctx.fillStyle = COL.white; ctx.fill();
+      ctx.beginPath(); ctx.arc(0,0, eggCrackType==='eye'?6:7, 0, Math.PI*2);
+      ctx.fillStyle = eggCrackType==='eye' ? COL.black : COL.yolk;
+      ctx.fill();
+      ctx.restore();
+
+      // top shell half lifting away
+      ctx.save();
+      ctx.translate(0, -gap);
+      ctx.rotate(-p*0.14);
+      eggTopHalfPath();
+      eggShellStyle();
+      ctx.restore();
+
+      // bottom shell half dropping away
+      ctx.save();
+      ctx.translate(0, gap);
+      ctx.rotate(p*0.14);
+      eggBottomHalfPath();
+      eggShellStyle();
+      ctx.restore();
+
+      // a couple of small shell chips flying off for extra crunch
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - p*0.7);
+      [[-16,-1],[17,1]].forEach(c2=>{
+        ctx.save();
+        ctx.translate(c2[0]+c2[1]*p*15, 8 - p*9);
+        ctx.rotate(c2[1]*p*1.5);
+        ctx.beginPath();
+        ctx.moveTo(0,0); ctx.lineTo(5,3); ctx.lineTo(1,6);
+        ctx.closePath();
+        ctx.fillStyle = COL.white; ctx.strokeStyle = COL.black; ctx.lineWidth = 1;
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      });
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // LCD-style single eyeball: used for falling eyeballs and the character's head
+  function drawEyeIcon(x,y,r, seed){
+    seed = seed || 0;
+    ctx.save();
+    ctx.translate(x,y);
+
+    // sclera - flat LCD-background circle with a bold ink outline
+    ctx.beginPath();
+    ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.fillStyle = COL.white;
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r*0.09);
+    ctx.strokeStyle = COL.black;
+    ctx.stroke();
+
+    // a few flat printed "vein" ticks, no gradient/color - just short ink strokes
+    ctx.strokeStyle = COL.black;
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = Math.max(1, r*0.04);
+    for(let i=0;i<5;i++){
+      const a = (i/5)*Math.PI*2 + seed;
+      const ex = Math.cos(a)*r*0.9, ey = Math.sin(a)*r*0.9;
+      const sx = Math.cos(a)*r*0.6, sy = Math.sin(a)*r*0.6;
+      ctx.beginPath();
+      ctx.moveTo(sx,sy); ctx.lineTo(ex,ey);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // solid ink iris + pupil, flat, no gradient
+    ctx.beginPath();
+    ctx.arc(0,0, r*0.5, 0, Math.PI*2);
+    ctx.fillStyle = COL.black;
+    ctx.fill();
+
+    // one flat highlight segment - printed, not glowing
+    ctx.beginPath();
+    ctx.arc(-r*0.18,-r*0.2, r*0.13, 0, Math.PI*2);
+    ctx.fillStyle = COL.white;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // wrong item: fried egg (目玉焼き)
+  function drawFriedEgg(x,y,r,wobble){
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(Math.sin(wobble)*0.15);
+    ctx.beginPath();
+    ctx.fillStyle = COL.white;
+    ctx.strokeStyle = COL.black;
+    ctx.lineWidth = 3;
+    const bumps = 9;
+    for(let i=0;i<=bumps;i++){
+      const a = (i/bumps)*Math.PI*2;
+      const rr = r * (0.85 + Math.sin(a*3 + wobble)*0.18);
+      const px = Math.cos(a)*rr, py = Math.sin(a)*rr*0.85;
+      if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = COL.yolk;
+    ctx.arc(0,0, r*0.42, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = COL.yolkDark;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = '#fff6d8';
+    ctx.arc(-r*0.12,-r*0.1, r*0.14, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawStack(){
+    const baseX = player.x;
+    for(let i=0;i<stack.length;i++){
+      drawEyeIcon(baseX, stackSlotY(i), STACK_EYE_R, i*1.3);
+    }
+  }
+
+  // black-boned skeleton (photo-style silhouette against the red world)
+  function drawSkeleton(){
+    const x = player.x, y = player.y;
+    const w = player.w, h = player.h;
+    const r = player.headR;
+    const maxedOut = player.headR >= HEAD_R_MAX;
+    const bob = player.jumping ? 0 : (maxedOut ? Math.abs(Math.sin(player.walkPhase*1.6))*5 : Math.sin(player.walkPhase)*2.5);
+    const legSwing = player.jumping ? 8 : (maxedOut ? Math.sin(player.walkPhase*1.6)*17 : Math.sin(player.walkPhase)*11);
+    const armSwing = player.jumping ? -12 : (maxedOut ? Math.sin(player.walkPhase*1.6+Math.PI)*20 : Math.sin(player.walkPhase+Math.PI)*8);
+    const lean = maxedOut && !player.jumping ? Math.sin(player.walkPhase*0.8)*0.1 : 0;
+
+    ctx.save();
+    ctx.translate(x, y - h - bob);
+    if(lean) ctx.rotate(lean);
+
+    ctx.lineCap = 'round';
+
+    // pelvis
+    ctx.beginPath();
+    ctx.moveTo(-14, h*0.78);
+    ctx.lineTo(14, h*0.78);
+    ctx.lineTo(10, h*0.9);
+    ctx.lineTo(-10, h*0.9);
+    ctx.closePath();
+    ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1.5;
+    ctx.fill(); ctx.stroke();
+
+    function drawLeg(sign, swing){
+      const hipX = sign*7, hipY = h*0.86;
+      const kneeX = hipX + swing*0.5, kneeY = h*0.98;
+      const footX = hipX + swing, footY = h+8;
+      ctx.strokeStyle = COL.bone;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(hipX,hipY); ctx.lineTo(kneeX,kneeY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(kneeX,kneeY); ctx.lineTo(footX,footY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1;
+      ctx.arc(kneeX,kneeY,4,0,Math.PI*2);
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone;
+      ctx.ellipse(footX + sign*4, footY, 9, 4, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    drawLeg(-1, legSwing);
+    drawLeg(1, -legSwing);
+
+    // spine
+    ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, h*0.42); ctx.lineTo(0, h*0.78);
+    ctx.stroke();
+    for(let i=0;i<5;i++){
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone;
+      ctx.arc(0, h*0.44 + i*0.065*h, 2.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // ribcage
+    ctx.beginPath();
+    ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1.8;
+    ctx.ellipse(0, h*0.56, 21, h*0.2, 0, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(233,223,192,0.7)'; ctx.lineWidth = 1.4;
+    for(let i=0;i<4;i++){
+      const yy = h*0.44 + i*9;
+      ctx.beginPath();
+      ctx.moveTo(-2, yy);
+      ctx.quadraticCurveTo(-19, yy+3, -15, yy+11);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(2, yy);
+      ctx.quadraticCurveTo(19, yy+3, 15, yy+11);
+      ctx.stroke();
+    }
+
+    // arms - held a little raised even at rest, dancer-like
+    function drawArm(sign, swing){
+      const shX = sign*17, shY = h*0.46;
+      const elX = shX + sign*10 + swing*0.3, elY = h*0.5;
+      const handX = elX + sign*10 + swing*0.4, handY = h*0.28;
+      ctx.strokeStyle = COL.bone; ctx.lineWidth = 6.5;
+      ctx.beginPath();
+      ctx.moveTo(shX,shY); ctx.lineTo(elX,elY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(elX,elY); ctx.lineTo(handX,handY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1;
+      ctx.arc(elX,elY,3.6,0,Math.PI*2);
+      ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = COL.bone; ctx.lineWidth = 1.2;
+      for(let f=-1;f<=1;f++){
+        ctx.beginPath();
+        ctx.moveTo(handX, handY);
+        ctx.lineTo(handX+f*3, handY-6);
+        ctx.stroke();
+      }
+    }
+    drawArm(-1, armSwing);
+    drawArm(1, -armSwing);
+
+    ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1;
+    [-17,17].forEach(sx=>{
+      ctx.beginPath(); ctx.arc(sx, h*0.46, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    });
+
+    // neck - fixed, normal length regardless of how big the head has grown
+    const localHeadCenterY = h*0.42 - NECK_LEN - r + bob;
+    ctx.strokeStyle = COL.bone; ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(0, localHeadCenterY + r); ctx.lineTo(0, h*0.42);
+    ctx.stroke();
+
+    // the head itself: the photo-real eyeball, which grows over time
+    drawEyeIcon(0, localHeadCenterY, r, 0);
+
+    ctx.restore();
+  }
+
+  // a standalone, exaggerated dance version of the hero for the GAME OVER screen -
+  // same body structure as drawSkeleton, but self-contained (no dependency on player/gameplay state)
+  function drawDanceHero(cx, cy, h, r, t){
+    const bob = Math.abs(Math.sin(t*3)) * (h*0.05);
+    const legSwing = Math.sin(t*3) * 14;
+    const armSwing = Math.sin(t*3 + Math.PI) * 16;
+    const lean = Math.sin(t*1.5) * 0.12;
+
+    ctx.save();
+    ctx.translate(cx, cy - h - bob);
+    ctx.rotate(lean);
+    ctx.lineCap = 'round';
+
+    // pelvis
+    ctx.beginPath();
+    ctx.moveTo(-14, h*0.78);
+    ctx.lineTo(14, h*0.78);
+    ctx.lineTo(10, h*0.9);
+    ctx.lineTo(-10, h*0.9);
+    ctx.closePath();
+    ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1.5;
+    ctx.fill(); ctx.stroke();
+
+    function danceLeg(sign, swing){
+      const hipX = sign*7, hipY = h*0.86;
+      const kneeX = hipX + swing*0.5, kneeY = h*0.98;
+      const footX = hipX + swing, footY = h+8;
+      ctx.strokeStyle = COL.bone;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(hipX,hipY); ctx.lineTo(kneeX,kneeY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(kneeX,kneeY); ctx.lineTo(footX,footY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1;
+      ctx.arc(kneeX,kneeY,4,0,Math.PI*2);
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone;
+      ctx.ellipse(footX + sign*4, footY, 9, 4, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    danceLeg(-1, legSwing);
+    danceLeg(1, -legSwing);
+
+    // spine
+    ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, h*0.42); ctx.lineTo(0, h*0.78);
+    ctx.stroke();
+    for(let i=0;i<5;i++){
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone;
+      ctx.arc(0, h*0.44 + i*0.065*h, 2.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // ribcage
+    ctx.beginPath();
+    ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1.8;
+    ctx.ellipse(0, h*0.56, 21, h*0.2, 0, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(233,223,192,0.7)'; ctx.lineWidth = 1.4;
+    for(let i=0;i<4;i++){
+      const yy = h*0.44 + i*9;
+      ctx.beginPath();
+      ctx.moveTo(-2, yy);
+      ctx.quadraticCurveTo(-19, yy+3, -15, yy+11);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(2, yy);
+      ctx.quadraticCurveTo(19, yy+3, 15, yy+11);
+      ctx.stroke();
+    }
+
+    // arms - big dance swings, thrown up and out
+    function danceArm(sign, swing){
+      const shX = sign*17, shY = h*0.46;
+      const elX = shX + sign*10 + swing*0.4, elY = h*0.5 - Math.max(0,swing)*0.3;
+      const handX = elX + sign*10 + swing*0.5, handY = h*0.28 - Math.max(0,swing)*0.5;
+      ctx.strokeStyle = COL.bone; ctx.lineWidth = 6.5;
+      ctx.beginPath();
+      ctx.moveTo(shX,shY); ctx.lineTo(elX,elY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(elX,elY); ctx.lineTo(handX,handY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1;
+      ctx.arc(elX,elY,3.6,0,Math.PI*2);
+      ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = COL.bone; ctx.lineWidth = 1.2;
+      for(let f=-1;f<=1;f++){
+        ctx.beginPath();
+        ctx.moveTo(handX, handY);
+        ctx.lineTo(handX+f*3, handY-6);
+        ctx.stroke();
+      }
+    }
+    danceArm(-1, armSwing);
+    danceArm(1, -armSwing);
+
+    ctx.fillStyle = COL.bone; ctx.strokeStyle = COL.boneRim; ctx.lineWidth = 1;
+    [-17,17].forEach(sx=>{
+      ctx.beginPath(); ctx.arc(sx, h*0.46, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    });
+
+    // neck - fixed, normal length regardless of how big the head grew
+    const localHeadCenterY = h*0.42 - NECK_LEN - r;
+    ctx.strokeStyle = COL.bone; ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(0, localHeadCenterY + r); ctx.lineTo(0, h*0.42);
+    ctx.stroke();
+
+    // the head - their final, fully-grown eye
+    drawEyeIcon(0, localHeadCenterY, r, 0);
+
+    ctx.restore();
+  }
+
+  // obstacle: an oblivious man walking while staring at his phone
+  function drawHuman(h){
+    ctx.save();
+    ctx.translate(h.x, h.y - h.h);
+    const dir = h.vx >= 0 ? 1 : -1; // +1 walking right, -1 walking left
+    const walk = Math.sin(h.phase);
+    const strideF = walk*12;
+    const strideB = -walk*12;
+    const bob = Math.abs(Math.cos(h.phase))*2;
+
+    const shoulderW = 15;
+    const torsoTop = h.h*0.30 - bob;
+    const torsoBottom = h.h*0.64 - bob;
+    const headCX = dir*2, headCY = torsoTop - 7;
+    const headR = 12;
+
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = COL.black;
+    ctx.fillStyle = COL.black;
+
+    // back leg - thick, round-capped, so it reads as a solid rounded limb
+    ctx.lineWidth = 11;
+    ctx.beginPath();
+    ctx.moveTo(0, torsoBottom);
+    ctx.lineTo(strideB*0.7, h.h+2);
+    ctx.stroke();
+
+    // front leg
+    ctx.beginPath();
+    ctx.moveTo(0, torsoBottom);
+    ctx.lineTo(strideF*0.75, h.h+6);
+    ctx.stroke();
+
+    // trailing arm, on the side opposite of travel
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(-dir*shoulderW*0.55, torsoTop+3);
+    ctx.lineTo(-dir*shoulderW*0.55 - dir*7 - strideB*0.35, torsoTop + (torsoBottom-torsoTop)*0.75);
+    ctx.stroke();
+
+    // leading arm, bent, holding the phone up around chest/waist height on the side
+    // he's actually walking toward - not raised to the face
+    const handX = dir*(shoulderW*0.85 + 9), handY = torsoTop + (torsoBottom-torsoTop)*0.55;
+    ctx.beginPath();
+    ctx.moveTo(dir*shoulderW*0.55, torsoTop+3);
+    ctx.lineTo(dir*(shoulderW*0.75+3), torsoTop + (torsoBottom-torsoTop)*0.3);
+    ctx.lineTo(handX, handY);
+    ctx.stroke();
+
+    // torso - one smooth rounded blob
+    ctx.beginPath();
+    ctx.moveTo(-shoulderW, torsoTop);
+    ctx.quadraticCurveTo(-shoulderW-3, torsoTop+(torsoBottom-torsoTop)*0.5, -shoulderW*0.7, torsoBottom);
+    ctx.lineTo(shoulderW*0.7, torsoBottom);
+    ctx.quadraticCurveTo(shoulderW+3, torsoTop+(torsoBottom-torsoTop)*0.5, shoulderW, torsoTop);
+    ctx.closePath();
+    ctx.fill();
+
+    // head - overlaps the torso top so it fuses into one silhouette, no visible thin neck
+    ctx.beginPath();
+    ctx.arc(headCX, headCY, headR, 0, Math.PI*2);
+    ctx.fill();
+
+    // single glowing white eye, toward the leading edge of the face
+    ctx.fillStyle = COL.white;
+    ctx.beginPath();
+    ctx.arc(headCX+dir*3, headCY-1, 1.8, 0, Math.PI*2);
+    ctx.fill();
+
+    // the phone, glowing bright - held out in front at chest height
+    ctx.save();
+    ctx.translate(handX, handY);
+    ctx.rotate(-dir*0.1);
+    ctx.fillStyle = COL.black;
+    ctx.fillRect(-4.5,-7,9,14);
+    ctx.fillStyle = COL.white;
+    ctx.fillRect(-3.5,-6,7,12);
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // kasa-obake: a rare, slow-floating one-legged umbrella ghost with a single eye
+  function drawKasaObake(k){
+    ctx.save();
+    const bob = Math.sin(k.phase) * 10;
+    ctx.translate(k.x, k.y - k.h - 18 - bob);
+
+    // pulsing glow halo - makes it unmistakably special against the flat LCD scene
+    const pulse = 0.5 + 0.5*Math.sin(frame*0.15);
+    for(let i=3;i>=1;i--){
+      ctx.beginPath();
+      ctx.arc(0, -6, 26 + i*7 + pulse*5, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(200,19,36,${0.08 + pulse*0.05})`;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(0, -6, 30 + pulse*4, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(200,19,36,${0.35 + pulse*0.35})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // single leg dangling beneath the umbrella
+    ctx.strokeStyle = COL.black;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.lineTo(Math.sin(k.phase*1.4)*6, 34);
+    ctx.stroke();
+    // little foot
+    ctx.beginPath();
+    ctx.ellipse(Math.sin(k.phase*1.4)*6, 36, 7, 3.5, 0, 0, Math.PI*2);
+    ctx.fillStyle = COL.black;
+    ctx.fill();
+
+    // stubby arms poking from the sides
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-16, 4); ctx.lineTo(-24, -2+Math.sin(k.phase)*3);
+    ctx.moveTo(16, 4); ctx.lineTo(24, -2-Math.sin(k.phase)*3);
+    ctx.stroke();
+
+    // umbrella canopy - a scalloped dome
+    ctx.beginPath();
+    ctx.moveTo(-24, 6);
+    ctx.quadraticCurveTo(-26, -20, 0, -22);
+    ctx.quadraticCurveTo(26, -20, 24, 6);
+    for(let i=3;i>=-3;i--){
+      const sx = i*8;
+      const sy = 6 - Math.cos(i*0.6)*3;
+      ctx.lineTo(sx, sy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#c81324';
+    ctx.strokeStyle = COL.black;
+    ctx.lineWidth = 3;
+    ctx.fill();
+    ctx.stroke();
+
+    // umbrella tip
+    ctx.beginPath();
+    ctx.moveTo(0,-22); ctx.lineTo(0,-30);
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // rib lines on the canopy
+    ctx.strokeStyle = 'rgba(11,11,11,0.4)';
+    ctx.lineWidth = 1.2;
+    [-16,-8,8,16].forEach(sx=>{
+      ctx.beginPath();
+      ctx.moveTo(sx*1.1, 4);
+      ctx.lineTo(0,-20);
+      ctx.stroke();
+    });
+
+    // one eye, right in the middle of the canopy
+    ctx.beginPath();
+    ctx.arc(0,-8,8,0,Math.PI*2);
+    ctx.fillStyle = COL.white;
+    ctx.fill();
+    ctx.strokeStyle = COL.black; ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0,-8,4,0,Math.PI*2);
+    ctx.fillStyle = COL.black;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function draw(){
+    // point every existing draw call at the tiny buffer for this frame
+    ctx = bufferCtx;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,pixelBuffer.width,pixelBuffer.height);
+    ctx.scale(1/PIXEL_SCALE, 1/PIXEL_SCALE);
+
+    drawBackground();
+    drawTopEgg();
+
+    for(const it of items){
+      if(it.type==='eye') drawEyeIcon(it.x, it.y, it.r, it.wobble);
+      else drawFriedEgg(it.x, it.y, it.r, it.wobble);
+    }
+
+    if(human) drawHuman(human);
+    if(kasaObake) drawKasaObake(kasaObake);
+
+    drawStack();
+    drawSkeleton();
+
+    // rings - flat ink flashes, LCD games blink rather than glow
+    for(const r of rings){
+      const alpha = Math.max(0, r.life/r.maxLife);
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+      ctx.lineWidth = r.red ? 4 : 3;
+      ctx.strokeStyle = r.red ? `rgba(200,19,36,${alpha*0.9})` : `rgba(33,26,16,${alpha*0.85})`;
+      ctx.stroke();
+    }
+
+    // particles - flat ink specks (red for the kasa-obake's special bonus effect)
+    for(const p of particles){
+      const alpha = Math.max(0, p.life/p.maxLife);
+      ctx.beginPath();
+      const rr = p.psy ? 3 + 2*Math.sin(frame*0.3 + p.x) : 4;
+      ctx.arc(p.x, p.y, Math.max(1.5,rr), 0, Math.PI*2);
+      ctx.fillStyle = p.red ? '#c81324' : COL.black;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    if(growFlashTimer>0){
+      // a bright screen-flash, like an old LCD game celebrating a big moment
+      ctx.fillStyle = COL.white;
+      ctx.globalAlpha = (growFlashTimer/34)*0.85;
+      ctx.fillRect(0,0,W,H);
+      ctx.globalAlpha = 1;
+    }
+
+    if(flashTimer>0){
+      ctx.fillStyle = COL.black;
+      ctx.globalAlpha = flashTimer/22;
+      ctx.fillRect(0,0,W,H);
+      ctx.globalAlpha = 1;
+    }
+
+    // blit the low-res buffer up to the real canvas with no smoothing -> crisp pixel art
+    realCtx.imageSmoothingEnabled = false;
+    realCtx.clearRect(0,0,W,H);
+    realCtx.drawImage(pixelBuffer, 0,0, W,H);
+  }
+
+  // retro games rarely redrew every frame - update stays smooth/responsive,
+  // but the screen itself only refreshes every few frames for that stepped, choppy look
+  const RETRO_FRAME_SKIP = 3;
+  let retroFrameCounter = 0;
+
+  function loop(){
+    if(running && !gameOver){
+      update();
+    }
+    retroFrameCounter++;
+    if(retroFrameCounter >= RETRO_FRAME_SKIP){
+      retroFrameCounter = 0;
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  updateLivesUI();
+  draw();
+  loop();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2860 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>パパにはないしょ! 3D</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: #05040a;
+    font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", "Yu Gothic", sans-serif;
+    touch-action: none;
+  }
+  #gameWrap { position: fixed; inset: 0; width: 100vw; height: 100dvh; background: #000; overflow: hidden; }
+  #three-canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #vignette { position:absolute; inset:0; pointer-events:none; z-index:4;
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(255,238,190,0.05) 0%, rgba(255,238,190,0) 48%),
+      radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 52%, rgba(25,12,38,0.30) 100%);
+    mix-blend-mode: normal; }
+  #grain { display:none; }
+  .corner { display:none; }
+
+  #hud { position:absolute; top:0; left:0; right:0; display:flex; align-items:center; justify-content:center;
+    padding:max(10px, env(safe-area-inset-top)) 12px 8px;
+    background:linear-gradient(to bottom, rgba(18,10,34,.68), rgba(18,10,34,.18) 72%, transparent);
+    color:#fff; pointer-events:none; z-index:6; }
+  .chip { display:flex; align-items:center; gap:5px; font-weight:900; white-space:nowrap;
+    background:rgba(255,255,255,.12); backdrop-filter:blur(12px) saturate(1.35); -webkit-backdrop-filter:blur(12px) saturate(1.35);
+    border:1px solid rgba(255,255,255,.32); border-radius:22px; padding:6px 12px;
+    text-shadow:0 2px 5px rgba(0,0,0,.75); box-shadow:0 5px 18px rgba(30,10,50,.28), inset 0 1px 0 rgba(255,255,255,.35); }
+  #scoreEl { position:relative; overflow:hidden; min-width:150px; height:58px; justify-content:center;
+    font-size:30px; letter-spacing:.5px; color:#fff8c7;
+    background:linear-gradient(135deg, rgba(255,255,255,.25), rgba(255,193,77,.22) 45%, rgba(255,111,196,.18));
+    border:2px solid rgba(255,236,164,.62); border-radius:18px;
+    box-shadow:0 8px 26px rgba(45,14,62,.35), 0 0 24px rgba(255,203,83,.18), inset 0 1px 0 rgba(255,255,255,.55);
+    text-shadow:0 2px 0 rgba(91,39,0,.45), 0 0 12px rgba(255,239,132,.45); }
+  #scoreEl::after { content:""; position:absolute; top:-20%; left:-45%; width:35%; height:150%; transform:rotate(22deg);
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent); animation:scoreShine 3.2s ease-in-out infinite; }
+  @keyframes scoreShine { 0%,55%{left:-45%;opacity:0} 65%{opacity:1} 82%,100%{left:125%;opacity:0} }
+
+  #alertWrap { position:absolute; top:74px; left:50%; transform:translateX(-50%); width:52%; max-width:250px; z-index:6; pointer-events:none; }
+  #alertLabel { color:#fff; font-size:10px; text-align:center; margin-bottom:4px; text-shadow:0 2px 5px #16091f; font-weight:900; letter-spacing:3px; opacity:.95; }
+  #alertBarBg { background:rgba(10,8,18,.48); border-radius:10px; height:10px; overflow:hidden; border:1px solid rgba(255,255,255,.42);
+    box-shadow:inset 0 2px 5px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.25); }
+  #alertBar { height:100%; width:0%; background:linear-gradient(90deg,#54f0a1,#ffe05b,#ff5b52); transition:width .08s linear,background .2s linear;
+    box-shadow:0 0 12px rgba(255,226,91,.72); }
+
+  #missionList { position:absolute; top:112px; left:10px; z-index:6; pointer-events:none; display:flex; flex-direction:column; gap:5px; align-items:flex-start; max-width:58%; }
+  .missionChip { background:linear-gradient(135deg, rgba(38,22,48,.62), rgba(255,255,255,.13)); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    color:#fff; font-size:11px; font-weight:800; padding:7px 11px; border-radius:14px; text-shadow:0 2px 3px #000;
+    border:1px solid rgba(255,255,255,.24); box-shadow:0 5px 16px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.24); }
+  .missionChip.done { text-decoration:none; opacity:.75; background:linear-gradient(135deg, rgba(60,220,150,.48), rgba(255,255,255,.12)); }
+
+  #radarWrap { position:absolute; top:max(12px, env(safe-area-inset-top)); right:8px; z-index:6; width:102px; height:102px; pointer-events:none;
+    filter:drop-shadow(0 6px 14px rgba(0,0,0,.55)); }
+  #radarCanvasReal { width:100%; height:100%; border-radius:50%; border:3px solid rgba(255,255,255,.72);
+    box-shadow:0 0 0 2px rgba(255,191,79,.2), inset 0 0 18px rgba(0,0,0,.45); }
+
+  #controls { position:absolute; bottom:0; left:0; right:0; padding:0 18px max(22px,env(safe-area-inset-bottom)) 18px;
+    display:flex; align-items:flex-end; justify-content:space-between; z-index:10; pointer-events:none; }
+  #joyBase { width:128px; height:128px; border-radius:50%;
+    background:radial-gradient(circle at 35% 28%, rgba(255,255,255,.32), rgba(255,255,255,.10) 48%, rgba(255,205,111,.07));
+    border:2px solid rgba(255,255,255,.55); position:relative; pointer-events:auto; touch-action:none;
+    box-shadow:0 8px 25px rgba(0,0,0,.38), inset 0 0 18px rgba(255,255,255,.10), 0 0 0 1px rgba(255,201,94,.15); }
+  #joyKnob { width:54px; height:54px; border-radius:50%; background:radial-gradient(circle at 35% 28%, #fff, #dedce6 65%, #bdb8c9);
+    border:2px solid rgba(255,255,255,.95); position:absolute; left:35px; top:35px; box-shadow:0 5px 12px rgba(0,0,0,.38), inset 0 2px 4px #fff; }
+  #actionBtn { width:108px; height:108px; border-radius:50%;
+    background:radial-gradient(circle at 34% 24%, #ffe8a5, #ffb43f 52%, #ed7c25 100%);
+    border:3px solid rgba(255,255,255,.72); color:#4a2600; font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center; text-align:center; line-height:1.25;
+    pointer-events:auto; touch-action:none; white-space:pre-line; box-shadow:0 8px 24px rgba(0,0,0,.42), 0 0 24px rgba(255,177,59,.24), inset 0 3px 8px rgba(255,255,255,.55); transition:transform .08s,opacity .15s; }
+  #actionBtn.active { transform:scale(.9); }
+  #actionBtn.disabled { opacity:0; visibility:hidden; pointer-events:none; }
+  #actionCluster { display:flex; flex-direction:column; align-items:center; gap:12px; pointer-events:auto; }
+  .miniBtn { width:64px; height:64px; border-radius:50%; background:radial-gradient(circle at 35% 25%, rgba(255,255,255,.72), rgba(255,255,255,.18) 55%, rgba(255,196,100,.12));
+    border:2px solid rgba(255,255,255,.68); color:#3a2600; font-weight:900; font-size:10px; line-height:1.1; display:flex; align-items:center; justify-content:center; text-align:center;
+    box-shadow:0 6px 16px rgba(0,0,0,.32), inset 0 2px 5px rgba(255,255,255,.4); pointer-events:auto; touch-action:none; transition:transform .08s; }
+  .miniBtn.active { transform:scale(.88); }
+
+  #overlay { position: absolute; inset: 0; z-index: 20; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; color:#fff; padding: 24px;
+    background: rgba(8,6,16,0.78); backdrop-filter: blur(3px); }
+  #overlay.hidden { display:none; }
+  #overlay h1 { font-size: clamp(22px,7vw,34px); margin: 0 0 8px 0; text-shadow: 0 3px 0 #00000055;}
+  #overlay h2 { font-size: clamp(18px,6vw,26px); margin: 0 0 12px 0; }
+  #overlay p { font-size: clamp(12px,3.6vw,15px); line-height:1.7; max-width: 420px; margin: 4px 0; opacity:0.95;}
+  #overlay .bigEmoji { font-size: clamp(46px,14vw,72px); margin-bottom:6px; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4)); }
+  .btn { margin-top: 18px; padding: 13px 34px; border-radius: 30px; border: none;
+    background: linear-gradient(180deg,#ffcf7a,#f4b044); color:#3a2200; font-weight:800; font-size: 15px;
+    box-shadow: 0 5px 0 #b5771c; cursor:pointer; pointer-events:auto; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b5771c; }
+  #flash { position:absolute; inset:0; background:#ff1e1e; opacity:0; pointer-events:none; z-index:15; }
+  #bloomCanvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:3;
+    mix-blend-mode: screen; opacity:0.55; filter: blur(7px) saturate(1.3); }
+  #cakeFxCanvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:14; }
+  .corner { position:absolute; width:26px; height:26px; border-color: rgba(255,255,255,0.35); z-index:6; pointer-events:none; }
+  .corner.tl { top:8px; left:8px; border-top:2px solid; border-left:2px solid; }
+  .corner.tr { top:8px; right:8px; border-top:2px solid; border-right:2px solid; }
+  .corner.bl { bottom:8px; left:8px; border-bottom:2px solid; border-left:2px solid; }
+  .corner.br { bottom:8px; right:8px; border-bottom:2px solid; border-right:2px solid; }
+  #loadingMsg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:14px; z-index:30; background:#05040a; text-align:center; padding:30px; }
+  #editorBtn { position:absolute; top:10px; left:10px; z-index:25; padding:9px 13px; border-radius:18px; border:1px solid rgba(255,255,255,.45); background:rgba(20,20,25,.78); color:#fff; font-weight:800; cursor:pointer; }
+  #editorPanel { position:absolute; top:10px; left:10px; right:10px; z-index:26; width:auto; max-width:520px; max-height:calc(100vh - 20px); overflow:auto; box-sizing:border-box; padding:12px; border-radius:14px; background:rgba(18,18,22,.92); color:#fff; box-shadow:0 8px 30px rgba(0,0,0,.4); display:none; font-size:12px; }
+  #editorPanel.open { display:block; }
+  #editorPanel.minimized { left:auto; right:10px; width:auto; max-width:none; max-height:none; padding:6px; overflow:visible; }
+  #editorPanel.minimized > :not(#editorMinimize) { display:none; }
+  #editorMinimize { padding:7px 11px; border:0; border-radius:9px; background:#eee; color:#222; font-weight:900; cursor:pointer; min-width:42px; }
+  #editorPanel h3 { margin:0 0 8px; font-size:15px; }
+  #editorInfo { line-height:1.5; margin-bottom:8px; opacity:.9; }
+  #editorText { display:none; width:100%; height:180px; box-sizing:border-box; margin-top:8px; padding:8px; border:1px solid rgba(255,255,255,.18); border-radius:8px; background:#0b0b0e; color:#dff7ff; font:11px/1.4 monospace; resize:vertical; }
+  #editorText.show { display:block; }
+  .editorRow { display:flex; gap:6px; margin-top:7px; }
+  .editorRow button { flex:1; padding:8px 7px; border:0; border-radius:9px; background:#eee; color:#222; font-weight:800; cursor:pointer; }
+  .editorRow button.danger { background:#e65b5b; color:#fff; }
+  #editorHint { margin-top:8px; opacity:.7; line-height:1.45; }
+  #editorList { margin-top:9px; display:flex; flex-direction:column; gap:4px; }
+  .editorItem { padding:6px 8px; border-radius:7px; background:rgba(255,255,255,.08); cursor:pointer; }
+  .editorItem.selected { background:rgba(255,190,90,.35); }
+  #editorPaletteTitle { margin-top:10px; font-weight:900; opacity:.9; }
+  #editorPalette { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin-top:6px; }
+  #editorPalette button { padding:8px 6px; border:0; border-radius:9px; background:#eee; color:#222; font-weight:800; cursor:pointer; font-size:11px; }
+  .editorItem.editorHidden { opacity:.48; }
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <div id="loadingMsg">読み込み中…</div>
+  <button id="editorBtn" style="display:none">配置編集</button>
+  <div id="editorPanel">
+    <button id="editorMinimize" title="編集パネルを最小化">−</button>
+    <h3>配置編集 V2</h3>
+    <div id="editorInfo">部屋は空の状態です。下のボタンから家具を追加してください。</div>
+    <div class="editorRow"><button id="editorRotateL">↶ 左回転</button><button id="editorRotateR">右回転 ↷</button></div>
+    <div class="editorRow"><button id="editorSave">配置を保存</button><button id="editorReset">全部リセット</button></div>
+    <div class="editorRow"><button id="editorExport">配置をテキスト出力</button><button id="editorCopy">コピー</button></div>
+    <textarea id="editorText" readonly placeholder="ここに配置データが表示されます"></textarea>
+    <div class="editorRow"><button id="editorDelete" class="danger">選択した物体を削除</button><button id="editorExit">ゲームへ戻る</button></div>
+    <div id="editorHint">物体を追加 → ドラッグで移動 → 回転ボタンで向きを変更。カーテンとルンバは固定です。ルンバはゲーム中に自動で走り、ジャンプで上に乗れます。</div>
+    <div id="editorPaletteTitle">家具を追加</div>
+    <div id="editorPalette"></div>
+    <div id="editorList"></div>
+  </div>
+  <canvas id="three-canvas"></canvas>
+  <canvas id="bloomCanvas" width="160" height="284"></canvas>
+  <canvas id="cakeFxCanvas"></canvas>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+  <div id="flash"></div>
+
+  <div id="hud">
+    <div class="chip" id="scoreEl">⭐ 0</div>
+  </div>
+  <div id="alertWrap">
+    <div id="alertLabel">DANGER</div>
+    <div id="alertBarBg"><div id="alertBar"></div></div>
+  </div>
+  <div id="missionList"></div>
+  <div id="radarWrap"><canvas id="radarCanvasReal" width="192" height="192"></canvas></div>
+
+  <div id="controls">
+    <div id="joyBase"><div id="joyKnob"></div></div>
+    <div id="actionCluster">
+      <div id="jumpBtn" class="miniBtn">🦘<br>ジャンプ</div>
+      <div id="crouchBtn" class="miniBtn">🧎<br>しゃがむ</div>
+      <div id="actionBtn" class="disabled">-</div>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div class="bigEmoji">🍰</div>
+    <h1>パパにはないしょ! 3D</h1>
+    <p>パパが帰ってきた!テーブルの上のケーキを、こっそりどれだけ食べられるかな?<br>
+    パパの視界(オレンジの輪)に入ると「！」が出て、パパが近づいてくる。捕まったらアウト!</p>
+    <p>左スティックで移動・右ボタンで「隠れる/出る/食べる」</p>
+    <button class="btn" id="startBtn">タップしてスタート</button>
+  </div>
+</div>
+
+<script>
+function loadScriptSeq(urls, onDone){
+  let i = 0;
+  function tryNext(){
+    if(i >= urls.length){ onDone(false); return; }
+    const s = document.createElement('script');
+    s.src = urls[i++];
+    s.onload = () => onDone(true);
+    s.onerror = tryNext;
+    document.head.appendChild(s);
+  }
+  tryNext();
+}
+loadScriptSeq([
+  'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+  'https://unpkg.com/three@0.128.0/build/three.min.js'
+], (ok) => {
+  if(ok && typeof THREE !== 'undefined'){ window.__startGame(); }
+  else { document.getElementById('loadingMsg').textContent = '3Dライブラリの読み込みに失敗しました。通信環境をご確認ください。'; }
+});
+</script>
+<script>
+window.__startGame = function(){
+'use strict';
+document.getElementById('loadingMsg').style.display = 'none';
+
+// ================= Audio =================
+let audioCtx = null;
+function ensureAudio(){ if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function tone(freq, dur, type='sine', vol=0.18, delay=0){
+  if(!audioCtx) return;
+  const t0 = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(vol, t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.03);
+}
+function sfxHide(){ tone(520,0.08,'triangle',0.15); tone(700,0.09,'triangle',0.12,0.05); }
+function sfxSuccess(){ [660,880,1100,1320,1568].forEach((f,i)=>tone(f,0.13,'triangle',0.16,i*0.055)); }
+function sfxCakeBurst(){
+  [880,1175,1568,1760].forEach((f,i)=>tone(f,0.11,'sine',0.12,i*0.045));
+  tone(240,0.18,'triangle',0.08,0.02);
+}
+function sfxAlertBeep(pitchMul){ tone(500*pitchMul,0.09,'square',0.16); }
+function sfxCatch(){ [500,380,280,180].forEach((f,i)=>tone(f,0.25,'sawtooth',0.2,i*0.13)); }
+function sfxClear(){ [523,659,784,1046,784,1046].forEach((f,i)=>tone(f,0.16,'triangle',0.16,i*0.11)); }
+function sfxJump(){ tone(440,0.1,'triangle',0.16); tone(680,0.09,'triangle',0.13,0.06); }
+function sfxLand(){ tone(200,0.09,'sine',0.14); tone(140,0.1,'sine',0.1,0.04); }
+function sfxSlide(){ tone(320,0.16,'sawtooth',0.11); tone(220,0.16,'sawtooth',0.09,0.05); }
+function sfxSprint(){ tone(700,0.07,'square',0.13); tone(900,0.07,'square',0.11,0.07); }
+
+// ================= Utility =================
+function dist2(ax,az,bx,bz){ return Math.hypot(ax-bx, az-bz); }
+function angDiff(a,b){ let d=a-b; while(d>Math.PI) d-=Math.PI*2; while(d<-Math.PI) d+=Math.PI*2; return d; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function cross(a,b){ return {x:a.y*b.z-a.z*b.y, y:a.z*b.x-a.x*b.z, z:a.x*b.y-a.y*b.x}; }
+function norm2(v){ const l=Math.hypot(v.x,v.z)||1; return {x:v.x/l, y:0, z:v.z/l}; }
+function shade(hex, pct){
+  const r=(hex>>16)&255, g=(hex>>8)&255, b=hex&255;
+  const f = v => clamp(Math.round(v + (pct/100)*255), 0, 255);
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+function rgbStr(hex){ return `rgb(${(hex>>16)&255},${(hex>>8)&255},${hex&255})`; }
+function shadeHexNum(hex, pct){
+  const r=(hex>>16)&255, g=(hex>>8)&255, b=hex&255;
+  const f = v => clamp(Math.round(v + (pct/100)*255), 0, 255);
+  return (f(r)<<16)|(f(g)<<8)|f(b);
+}
+function bob(phase){ return Math.abs(Math.sin(phase))*4.5; }
+
+// ================= Procedural textures =================
+function makeCanvasTexture(size, drawFn){
+  const cvs = document.createElement('canvas'); cvs.width = cvs.height = size;
+  drawFn(cvs.getContext('2d'), size);
+  const tex = new THREE.CanvasTexture(cvs);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+function makeFloorTexture(hex){
+  return makeCanvasTexture(256, (c,s)=>{
+    c.fillStyle = rgbStr(hex); c.fillRect(0,0,s,s);
+    const planks = 8;
+    for(let i=0;i<planks;i++){
+      const y = i*(s/planks);
+      c.fillStyle = i%2===0 ? shade(hex,-6) : shade(hex,5);
+      c.fillRect(0,y,s,s/planks);
+      c.strokeStyle = 'rgba(0,0,0,0.2)'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(0,y); c.lineTo(s,y); c.stroke();
+      const segs = 3;
+      for(let k=0;k<segs;k++){
+        const x = ((k+(i%2)*0.5)/segs)*s;
+        c.beginPath(); c.moveTo(x,y); c.lineTo(x,y+s/planks); c.stroke();
+      }
+    }
+    for(let i=0;i<260;i++){
+      c.fillStyle = `rgba(0,0,0,${Math.random()*0.05})`;
+      c.fillRect(Math.random()*s, Math.random()*s, 1.5, 5+Math.random()*9);
+    }
+  });
+}
+function makeWallTexture(hex){
+  return makeCanvasTexture(256, (c,s)=>{
+    const grad = c.createLinearGradient(0,0,0,s);
+    grad.addColorStop(0, shade(hex,10)); grad.addColorStop(1, shade(hex,-12));
+    c.fillStyle = grad; c.fillRect(0,0,s,s);
+    const panels = 4;
+    for(let i=1;i<panels;i++){
+      const x = i*(s/panels);
+      c.strokeStyle = 'rgba(0,0,0,0.16)'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(x,0); c.lineTo(x,s); c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,0.08)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(x+2,0); c.lineTo(x+2,s); c.stroke();
+    }
+    c.fillStyle = 'rgba(0,0,0,0.1)'; c.fillRect(0,s-14,s,14);
+  });
+}
+function makeGinghamTexture(baseHex, lineHex, size=128){
+  return makeCanvasTexture(size, (c,s)=>{
+    c.fillStyle = rgbStr(baseHex); c.fillRect(0,0,s,s);
+    c.globalAlpha = 0.5;
+    c.fillStyle = rgbStr(lineHex);
+    const step = s/8;
+    for(let i=0;i<8;i+=2){
+      c.fillRect(0, i*step, s, step);
+      c.fillRect(i*step, 0, step, s);
+    }
+    c.globalAlpha = 1;
+  });
+}
+function makeCurtainTexture(hex){
+  return makeCanvasTexture(128, (c,s)=>{
+    c.fillStyle = rgbStr(hex); c.fillRect(0,0,s,s);
+    const folds = 7;
+    for(let i=0;i<folds;i++){
+      const x = i*(s/folds), w = s/folds;
+      const grad = c.createLinearGradient(x,0,x+w,0);
+      grad.addColorStop(0, shade(hex,-18)); grad.addColorStop(0.5, shade(hex,14)); grad.addColorStop(1, shade(hex,-18));
+      c.fillStyle = grad; c.fillRect(x,0,w,s);
+    }
+  });
+}
+function makeShadowTexture(){
+  return makeCanvasTexture(64, (c,s)=>{
+    const g = c.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    g.addColorStop(0,'rgba(0,0,0,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0,0,s,s);
+  });
+}
+function makeDotsTexture(baseHex, dotHex){
+  return makeCanvasTexture(128, (c,s)=>{
+    c.fillStyle = rgbStr(baseHex); c.fillRect(0,0,s,s);
+    c.fillStyle = rgbStr(dotHex);
+    const step = 30;
+    for(let y=-step;y<s+step;y+=step){
+      for(let x=-step;x<s+step;x+=step){
+        const offset = (Math.round(y/step)%2!==0) ? step/2 : 0;
+        c.beginPath(); c.arc(x+offset, y, 4.5, 0, Math.PI*2); c.fill();
+      }
+    }
+  });
+}
+function makeHairTexture(hex){
+  return makeCanvasTexture(128, (c,s)=>{
+    c.fillStyle = rgbStr(hex); c.fillRect(0,0,s,s);
+    for(let i=0;i<50;i++){
+      const x = Math.random()*s;
+      c.strokeStyle = Math.random()>0.5 ? shade(hex,12) : shade(hex,-12);
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(x,0); c.lineTo(x+(Math.random()*10-5), s); c.stroke();
+    }
+  });
+}
+function makeSuitTexture(hex){
+  return makeCanvasTexture(128, (c,s)=>{
+    c.fillStyle = rgbStr(hex); c.fillRect(0,0,s,s);
+    for(let y=0;y<s;y+=4){ c.fillStyle=(y/4)%2===0?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)'; c.fillRect(0,y,s,2); }
+    c.strokeStyle='rgba(255,255,255,0.14)'; c.lineWidth=1;
+    for(let x=8;x<s;x+=16){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,s); c.stroke(); }
+  });
+}
+function makeFabricTexture(hex){
+  return makeCanvasTexture(128, (c,s)=>{
+    c.fillStyle = rgbStr(hex); c.fillRect(0,0,s,s);
+    for(let y=0;y<s;y+=4){
+      c.fillStyle = (y/4)%2===0 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)';
+      c.fillRect(0,y,s,2);
+    }
+  });
+}
+
+// ================= Stage Data (single stage: the living room cake heist) =================
+const STAGES = [
+  {
+    key:'living', title:'リビング', time:Infinity,
+    bounds:{minX:-290,maxX:290,minZ:-290,maxZ:290},
+    floorColor:0x965B32, wallColor:0xD0B486, fogColor:0xD0B486, ambient:0xB48655,
+    shape:'room',
+    camPos:{x:0,y:430,z:430}, camLook:{x:0,y:40,z:-40}, fov:42,
+    sun:{x:120,y:400,z:200},
+    dad:{ speed:175, visionRange:310, visionAngle:90*Math.PI/180, lookPause:0.55,
+      path:[{x:-170,z:120},{x:170,z:120},{x:170,z:-150},{x:-170,z:-150}] },
+    playerStart:{x:0,z:190},
+        hidingSpots:[
+      {x:0,z:-282,type:'curtain',emoji:'🪟',name:'カーテン',width:480},
+      {x:140,z:60,type:'sofa',emoji:'🛋️',name:'ソファ'},
+      {x:-220,z:150,type:'shelf',emoji:'📚',name:'たな'}
+    ],
+    cake:{ x:-42.11, z:-10.53, r:55, maxBites:5, biteDuration:0.42 }
+  }
+];
+
+// ================= Renderer / Scene =================
+const canvas = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:false});
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if('outputEncoding' in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = 0.84;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x6b6572, 520, 1250);
+const camera = new THREE.PerspectiveCamera(50, 1, 1, 3000);
+
+const hemi = new THREE.HemisphereLight(0xc4d0dc, 0x70472d, 0.27);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffc070, 0.56);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left = -500; sun.shadow.camera.right = 500;
+sun.shadow.camera.top = 500; sun.shadow.camera.bottom = -500;
+sun.shadow.camera.near = 10; sun.shadow.camera.far = 1500;
+sun.shadow.bias = -0.0015;
+scene.add(sun); scene.add(sun.target);
+
+const fillLight = new THREE.PointLight(0xffc080, 0.28, 320, 2);
+scene.add(fillLight);
+
+function buildVisionFan(range, halfAngle){
+  const shape = new THREE.Shape();
+  shape.moveTo(0,0);
+  const segs = 24;
+  for(let i=0;i<=segs;i++){
+    const a = -halfAngle + (2*halfAngle)*(i/segs);
+    shape.lineTo(Math.sin(a)*range, Math.cos(a)*range);
+  }
+  shape.lineTo(0,0);
+  const geo = new THREE.ShapeGeometry(shape, 24);
+  // 平面をあらかじめジオメトリ自体に焼き込んでおく(mesh.rotation.xは使わない)。
+  // rotation.x と rotation.y を同じメッシュに両方セットすると正しく合成されず、
+  // 後で rotation.y=facingAngle を設定したときに向きがねじれてしまうため。
+  geo.rotateX(Math.PI/2);
+  const mat = new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:0.32, depthWrite:false, side:THREE.DoubleSide, fog:false});
+  const mesh = new THREE.Mesh(geo, mat);
+  return mesh;
+}
+const dadLightPivot = new THREE.Group();
+scene.add(dadLightPivot);
+let dadVisionFan = null;
+
+let stageGroup = new THREE.Group();
+scene.add(stageGroup);
+
+// ---------- emoji sprite helper ----------
+function makeEmojiSprite(char, px=96){
+  const cvs = document.createElement('canvas'); cvs.width = px; cvs.height = px;
+  const c = cvs.getContext('2d');
+  c.font = `${Math.floor(px*0.8)}px sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(char, px/2, px/2 + px*0.04);
+  const tex = new THREE.CanvasTexture(cvs);
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:true});
+  return new THREE.Sprite(mat);
+}
+const shadowTex = makeShadowTexture();
+function makeBlob(radius){
+  const mat = new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false});
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(radius*2, radius*2), mat);
+  m.rotation.x = -Math.PI/2;
+  return m;
+}
+
+// ---------- character builders (Animal-Crossing-style big-head chibi, detailed) ----------
+function buildGirl(){
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({color:0xffdbac, roughness:0.6});
+  const dressTex = makeDotsTexture(0xff7aac, 0xffe3ee);
+  const dressMat = new THREE.MeshPhysicalMaterial({map:dressTex, color:0xffffff, roughness:0.4, clearcoat:0.35, clearcoatRoughness:0.4});
+  const collarMat = new THREE.MeshStandardMaterial({color:0xfff5f8, roughness:0.5});
+  const hairMat = new THREE.MeshPhysicalMaterial({map: makeHairTexture(0x6b4530), color:0xffffff, roughness:0.3, clearcoat:0.45});
+  const ribbonMat = new THREE.MeshStandardMaterial({color:0xe23a6a, roughness:0.4});
+  const shoeMat = new THREE.MeshStandardMaterial({color:0xb5486a, roughness:0.5});
+  const sockMat = new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.6});
+  const eyeMat = new THREE.MeshBasicMaterial({color:0x2a2018});
+  const sparkleMat = new THREE.MeshBasicMaterial({color:0xffffff});
+  const lashMat = new THREE.MeshBasicMaterial({color:0x1a140f});
+  const mouthMat = new THREE.MeshBasicMaterial({color:0xaa4a55});
+  const scleraMat = new THREE.MeshBasicMaterial({color:0xfffaf5});
+  const irisMat = new THREE.MeshBasicMaterial({color:0x7a5233});
+
+  // ears
+  const earL = new THREE.Mesh(new THREE.SphereGeometry(5,12,12), skin); earL.position.set(24,64,1); earL.scale.set(0.5,1,1);
+  const earR = earL.clone(); earR.position.x = -24;
+
+  // skirt hem trim
+  const hem = new THREE.Mesh(new THREE.TorusGeometry(25.5,2.1,8,28), collarMat); hem.position.y = 9; hem.rotation.x = Math.PI/2; hem.scale.set(1,1,0.95);
+
+  // extra hair volume at the back of the head (fills silhouette from behind/side)
+  const hairBack = new THREE.Mesh(new THREE.SphereGeometry(24,20,20), hairMat); hairBack.position.set(0,64,-10); hairBack.scale.set(1.05,0.95,0.9);
+
+  // socks + shoes
+  const sockL = new THREE.Mesh(new THREE.CylinderGeometry(7,7.5,7,12), sockMat); sockL.position.set(10,10,3);
+  const sockR = sockL.clone(); sockR.position.x = -10;
+  const shoeL = new THREE.Mesh(new THREE.SphereGeometry(8,14,14), shoeMat); shoeL.position.set(10,6,3); shoeL.scale.set(1,0.72,1.25);
+  const shoeR = shoeL.clone(); shoeR.position.x = -10;
+  const strapL = new THREE.Mesh(new THREE.BoxGeometry(15,2.4,4), ribbonMat); strapL.position.set(10,9,5);
+  const strapR = strapL.clone(); strapR.position.x = -10;
+
+  // rounded dress body (skirt flare + upper torso)
+  const skirt = new THREE.Mesh(new THREE.SphereGeometry(27,22,16), dressMat); skirt.position.y = 20; skirt.scale.set(1,0.62,1);
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(20,20,20), dressMat); torso.position.y = 34; torso.scale.set(1,1,0.95);
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(9,1.6,8,20), collarMat); collar.position.y = 47; collar.rotation.x = Math.PI/2;
+
+  // puff sleeves
+  const puffL = new THREE.Mesh(new THREE.SphereGeometry(9,14,14), dressMat); puffL.position.set(22,42,3);
+  const puffR = puffL.clone(); puffR.position.x = -22;
+
+  // big AC-style head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(25,30,30), skin); head.position.y = 66;
+  const hairTop = new THREE.Mesh(new THREE.SphereGeometry(26.5,24,24), hairMat); hairTop.position.y = 70; hairTop.scale.set(1,0.8,1.02);
+
+  const fringeC = new THREE.Mesh(new THREE.SphereGeometry(10.5,16,16), hairMat); fringeC.position.set(0,68,20.5); fringeC.scale.set(1.15,0.75,0.65);
+  const fringeL = new THREE.Mesh(new THREE.SphereGeometry(8,14,14), hairMat); fringeL.position.set(13,64,18); fringeL.scale.set(1,0.85,0.65);
+  const fringeR = fringeL.clone(); fringeR.position.x = -13;
+
+  const pig1 = new THREE.Mesh(new THREE.SphereGeometry(9.5,14,14), hairMat); pig1.position.set(26,60,2);
+  const pig2 = pig1.clone(); pig2.position.x = -26;
+  const pigTip1 = new THREE.Mesh(new THREE.SphereGeometry(5.5,12,12), hairMat); pigTip1.position.set(31,48,-1);
+  const pigTip2 = pigTip1.clone(); pigTip2.position.x = -31;
+  const tieBand1 = new THREE.Mesh(new THREE.TorusGeometry(9.7,1.4,8,16), ribbonMat); tieBand1.position.set(26,60,2); tieBand1.rotation.y = Math.PI/2;
+  const tieBand2 = tieBand1.clone(); tieBand2.position.x = -26;
+
+  // ribbon bow on top of head
+  const bowCenter = new THREE.Mesh(new THREE.SphereGeometry(2.6,10,10), ribbonMat); bowCenter.position.set(0,93,10);
+  const bowL = new THREE.Mesh(new THREE.ConeGeometry(5.5,7,3), ribbonMat); bowL.position.set(-5.5,93,10); bowL.rotation.z = Math.PI/2.3; bowL.rotation.x = Math.PI/2;
+  const bowR = bowL.clone(); bowR.position.x = 5.5; bowR.rotation.z = -Math.PI/2.3;
+
+  // layered eyes: sclera + iris + pupil + lashes + mouth
+  const scleraL = new THREE.Mesh(new THREE.SphereGeometry(4.3,12,12), scleraMat); scleraL.position.set(9,65,21.8); scleraL.scale.set(0.85,1.15,0.55);
+  const scleraR = scleraL.clone(); scleraR.position.x = -9;
+  const irisL = new THREE.Mesh(new THREE.CircleGeometry(3.1,16), irisMat); irisL.position.set(9,65,23.3);
+  const irisR = irisL.clone(); irisR.position.x = -9;
+  const eyeL = new THREE.Mesh(new THREE.CircleGeometry(1.7,14), eyeMat); eyeL.position.set(9,65,23.45);
+  const eyeR = eyeL.clone(); eyeR.position.x = -9;
+  const sparkL = new THREE.Mesh(new THREE.SphereGeometry(1.3,8,8), sparkleMat); sparkL.position.set(10.3,66.8,23.7);
+  const sparkR = sparkL.clone(); sparkR.position.x = -7.7;
+  const lashL = new THREE.Mesh(new THREE.BoxGeometry(6,1.2,1), lashMat); lashL.position.set(9,69.5,22.8); lashL.rotation.z = 0.25;
+  const lashR = lashL.clone(); lashR.position.x = -9; lashR.rotation.z = -0.25;
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(2.4,0.7,6,10,Math.PI), mouthMat); mouth.position.set(0,57.5,23.5); mouth.rotation.z = Math.PI;
+
+  // stubby arms
+  const armGeo = new THREE.CylinderGeometry(5.2,4.5,22,12);
+  const armL = new THREE.Mesh(armGeo, skin); armL.position.set(25,34,3); armL.rotation.z = -0.4;
+  const armR = new THREE.Mesh(armGeo, skin); armR.position.set(-25,34,3); armR.rotation.z = 0.4;
+  const handL = new THREE.Mesh(new THREE.SphereGeometry(6,12,12), skin); handL.position.set(32,25,6);
+  const handR = handL.clone(); handR.position.x = -32;
+  const fingerGeo = new THREE.CylinderGeometry(1.4,1.2,6,8);
+  const fingerL1 = new THREE.Mesh(fingerGeo, skin); fingerL1.position.set(32,22,11); fingerL1.rotation.x = 1.3;
+  const fingerL2 = new THREE.Mesh(fingerGeo, skin); fingerL2.position.set(35,22,10.5); fingerL2.rotation.x = 1.25; fingerL2.rotation.z = 0.15;
+  const fingerR1 = fingerL1.clone(); fingerR1.position.x = -32;
+  const fingerR2 = fingerL2.clone(); fingerR2.position.x = -35;
+
+  const blushTex = (()=>{ const cvs=document.createElement('canvas'); cvs.width=cvs.height=32; const c=cvs.getContext('2d');
+    const grad=c.createRadialGradient(16,16,0,16,16,16); grad.addColorStop(0,'rgba(255,130,150,0.6)'); grad.addColorStop(1,'rgba(255,130,150,0)');
+    c.fillStyle=grad; c.fillRect(0,0,32,32); return new THREE.CanvasTexture(cvs); })();
+  const blushMat = new THREE.SpriteMaterial({map:blushTex, transparent:true});
+  const blushL = new THREE.Sprite(blushMat); blushL.scale.set(12,12,1); blushL.position.set(13,61,19.5);
+  const blushR = blushL.clone(); blushR.position.x = -13;
+
+  // extra silhouette details: nose, hair pins, dress seams
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(1.8,10,10), skin); nose.position.set(0,61,24.2);
+  const hairPinL = new THREE.Mesh(new THREE.SphereGeometry(2.2,10,10), ribbonMat); hairPinL.position.set(20,78,18);
+  const hairPinR = hairPinL.clone(); hairPinR.position.x=-20;
+  const seam = new THREE.Mesh(new THREE.TorusGeometry(17,0.8,6,24), collarMat); seam.position.y=31; seam.rotation.x=Math.PI/2;
+  g.add(
+    nose, hairPinL, hairPinR, seam,
+    sockL, sockR, shoeL, shoeR, strapL, strapR,
+    skirt, torso, collar, hem, puffL, puffR,
+    head, hairTop, hairBack, fringeC, fringeL, fringeR, earL, earR,
+    pig1, pig2, pigTip1, pigTip2, tieBand1, tieBand2,
+    bowCenter, bowL, bowR,
+    scleraL, scleraR, irisL, irisR, eyeL, eyeR, sparkL, sparkR, lashL, lashR, mouth,
+    armL, armR, handL, handR, fingerL1, fingerL2, fingerR1, fingerR2,
+    blushL, blushR
+  );
+  g.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
+  g.userData.eatParts = {head, mouth, armL, armR, handL, handR, fingerL1, fingerL2, fingerR1, fingerR2};
+  return g;
+}
+function buildDad(){
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({color:0xe6bb8e, roughness:0.6});
+  const suitTex = makeSuitTexture(0x3b4a6b);
+  const suit = new THREE.MeshPhysicalMaterial({map:suitTex, color:0xffffff, roughness:0.4, clearcoat:0.3, clearcoatRoughness:0.4});
+  const lapelMat = new THREE.MeshStandardMaterial({color:0x2b3550, roughness:0.35});
+  const shirtMat = new THREE.MeshStandardMaterial({color:0xf3f4ef, roughness:0.5});
+  const pants = new THREE.MeshStandardMaterial({color:0x232a40, roughness:0.55});
+  const beltMat = new THREE.MeshStandardMaterial({color:0x1c1c1c, roughness:0.4});
+  const buckleMat = new THREE.MeshStandardMaterial({color:0xd8c37a, roughness:0.3, metalness:0.6});
+  const hairMat = new THREE.MeshPhysicalMaterial({map: makeHairTexture(0x241f1c), color:0xffffff, roughness:0.3, clearcoat:0.4});
+  const darkMat = new THREE.MeshBasicMaterial({color:0x1c1c1c});
+  const tieMat = new THREE.MeshStandardMaterial({color:0xc23c36, roughness:0.45});
+  const pocketMat = new THREE.MeshStandardMaterial({color:0xe8e4d8, roughness:0.5});
+  const lensMat = new THREE.MeshBasicMaterial({color:0xcfe6ff, transparent:true, opacity:0.3});
+  const watchMat = new THREE.MeshStandardMaterial({color:0x2a2a2a, roughness:0.4});
+  const watchFaceMat = new THREE.MeshStandardMaterial({color:0xd8c37a, roughness:0.3, metalness:0.6});
+  const scleraMat = new THREE.MeshBasicMaterial({color:0xfffaf5});
+  const irisMat = new THREE.MeshBasicMaterial({color:0x4a3626});
+  const soleMat = new THREE.MeshBasicMaterial({color:0x0d0d0d});
+
+  // stubby legs + socks/shoes
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(11,11,20,14), pants); legL.position.set(11,12,0);
+  const legR = legL.clone(); legR.position.x = -11;
+  const shoeL = new THREE.Mesh(new THREE.SphereGeometry(9,12,12), darkMat); shoeL.position.set(11,5,4); shoeL.scale.set(1,0.7,1.35);
+  const shoeR = shoeL.clone(); shoeR.position.x = -11;
+  const laceL = new THREE.Mesh(new THREE.BoxGeometry(6,1,10), new THREE.MeshBasicMaterial({color:0x3a3a3a})); laceL.position.set(11,8,7);
+  const laceR = laceL.clone(); laceR.position.x = -11;
+  const soleL = new THREE.Mesh(new THREE.BoxGeometry(15,2,22), soleMat); soleL.position.set(11,1,4);
+  const soleR = soleL.clone(); soleR.position.x = -11;
+
+  // rounded torso + belt + lapels + shirt + tie + pocket square
+  const body = new THREE.Mesh(new THREE.SphereGeometry(30,24,20), suit); body.position.y = 44; body.scale.set(1,0.95,0.92);
+  const belt = new THREE.Mesh(new THREE.TorusGeometry(29,3,8,24), beltMat); belt.position.y = 26; belt.rotation.x = Math.PI/2; belt.scale.set(1,1,0.92);
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(6,5,2), buckleMat); buckle.position.set(0,26,29.5);
+  const shirt = new THREE.Mesh(new THREE.BoxGeometry(12,26,2), shirtMat); shirt.position.set(0,48,27.5);
+  const lapelL = new THREE.Mesh(new THREE.BoxGeometry(9,22,1.5), lapelMat); lapelL.position.set(9,49,26.5); lapelL.rotation.z = -0.35;
+  const lapelR = lapelL.clone(); lapelR.position.x = -9; lapelR.rotation.z = 0.35;
+  const tie = new THREE.Mesh(new THREE.BoxGeometry(6.5,24,1.5), tieMat); tie.position.set(0,44,28);
+  const tieKnot = new THREE.Mesh(new THREE.BoxGeometry(8,7,2), tieMat); tieKnot.position.set(0,57,27.8); tieKnot.rotation.x = 0.12;
+  const pocketSq = new THREE.Mesh(new THREE.BoxGeometry(5,5,1), pocketMat); pocketSq.position.set(16,55,26); pocketSq.rotation.z = 0.3;
+
+  const armGeo = new THREE.CylinderGeometry(7.5,6.5,32,14);
+  const armL = new THREE.Mesh(armGeo, suit); armL.position.set(32,42,0); armL.rotation.z = -0.3;
+  const armR = new THREE.Mesh(armGeo, suit); armR.position.set(-32,42,0); armR.rotation.z = 0.3;
+  const handL = new THREE.Mesh(new THREE.SphereGeometry(7.2,12,12), skin); handL.position.set(40,24,3);
+  const handR = handL.clone(); handR.position.x = -40;
+  const fingerGeo = new THREE.CylinderGeometry(1.7,1.4,7,8);
+  const fingerL1 = new THREE.Mesh(fingerGeo, skin); fingerL1.position.set(40,20,9); fingerL1.rotation.x = 1.3;
+  const fingerL2 = new THREE.Mesh(fingerGeo, skin); fingerL2.position.set(44,20,8); fingerL2.rotation.x = 1.25; fingerL2.rotation.z = 0.15;
+  const fingerR1 = fingerL1.clone(); fingerR1.position.x = -40;
+  const fingerR2 = fingerL2.clone(); fingerR2.position.x = -44;
+  const collarPtL = new THREE.Mesh(new THREE.BoxGeometry(4,7,1), shirtMat); collarPtL.position.set(5,60,27); collarPtL.rotation.z = 0.5;
+  const collarPtR = collarPtL.clone(); collarPtR.position.x = -5; collarPtR.rotation.z = -0.5;
+  const buttonMat = new THREE.MeshBasicMaterial({color:0x14182a});
+  const button1 = new THREE.Mesh(new THREE.SphereGeometry(1.3,8,8), buttonMat); button1.position.set(0,38,29.5);
+  const button2 = new THREE.Mesh(new THREE.SphereGeometry(1.3,8,8), buttonMat); button2.position.set(0,30,29.2);
+  const watchBand = new THREE.Mesh(new THREE.TorusGeometry(6.6,1.3,8,16), watchMat); watchBand.position.set(38,30,4); watchBand.rotation.y = Math.PI/2;
+  const watchFace = new THREE.Mesh(new THREE.CircleGeometry(3.2,14), watchFaceMat); watchFace.position.set(38,30,10.5); watchFace.rotation.y = Math.PI/2;
+
+  // big AC-style head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(27,30,30), skin); head.position.y = 100;
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(27.6,22,16,0,Math.PI*2,0,Math.PI*0.5), hairMat); hair.position.y = 104;
+  const earL = new THREE.Mesh(new THREE.SphereGeometry(5.4,12,12), skin); earL.position.set(26,99,1); earL.scale.set(0.5,1,1);
+  const earR = earL.clone(); earR.position.x = -26;
+  const sideburnL = new THREE.Mesh(new THREE.SphereGeometry(4.6,10,10), hairMat); sideburnL.position.set(25,97,10); sideburnL.scale.set(0.6,1.3,0.7);
+  const sideburnR = sideburnL.clone(); sideburnR.position.x = -25;
+
+  const browL = new THREE.Mesh(new THREE.SphereGeometry(4.4,10,10), hairMat); browL.position.set(9.3,103.5,22.5); browL.scale.set(1.6,0.5,0.7); browL.rotation.z = -0.2;
+  const browR = browL.clone(); browR.position.x = -9.3; browR.rotation.z = 0.2;
+
+  const glassL = new THREE.Mesh(new THREE.TorusGeometry(6,1.1,10,18), darkMat); glassL.position.set(9.3,96,23.5); glassL.rotation.y = Math.PI/2;
+  const glassR = glassL.clone(); glassR.position.x = -9.3;
+  const lensL = new THREE.Mesh(new THREE.CircleGeometry(5.7,18), lensMat); lensL.position.set(9.3,96,23.9); lensL.rotation.y = Math.PI/2;
+  const lensR = lensL.clone(); lensR.position.x = -9.3;
+  const glassBridge = new THREE.Mesh(new THREE.BoxGeometry(6,1,1), darkMat); glassBridge.position.set(0,96,25.4);
+  const templeL = new THREE.Mesh(new THREE.BoxGeometry(8,0.8,0.8), darkMat); templeL.position.set(14.5,96.5,20); templeL.rotation.y = -0.3;
+  const templeR = templeL.clone(); templeR.position.x = -14.5; templeR.rotation.y = 0.3;
+  const nosePadL = new THREE.Mesh(new THREE.SphereGeometry(0.9,6,6), skin); nosePadL.position.set(3,94.5,25.2);
+  const nosePadR = nosePadL.clone(); nosePadR.position.x = -3;
+
+  const scleraL = new THREE.Mesh(new THREE.SphereGeometry(2.6,10,10), scleraMat); scleraL.position.set(9.3,96,23.4); scleraL.scale.set(0.9,1,0.5);
+  const scleraR = scleraL.clone(); scleraR.position.x = -9.3;
+  const irisL = new THREE.Mesh(new THREE.CircleGeometry(1.9,12), irisMat); irisL.position.set(9.3,96,24.05);
+  const irisR = irisL.clone(); irisR.position.x = -9.3;
+  const eyeL = new THREE.Mesh(new THREE.CircleGeometry(1,10), darkMat); eyeL.position.set(9.3,96,24.15);
+  const eyeR = eyeL.clone(); eyeR.position.x = -9.3;
+
+  const mustacheL = new THREE.Mesh(new THREE.SphereGeometry(5.4,10,10), hairMat); mustacheL.position.set(5.4,89,24.6); mustacheL.scale.set(1.6,0.55,0.6); mustacheL.rotation.z = -0.25;
+  const mustacheR = mustacheL.clone(); mustacheR.position.x = -5.4; mustacheR.rotation.z = 0.25;
+  const mustacheTipL = new THREE.Mesh(new THREE.SphereGeometry(2.3,8,8), hairMat); mustacheTipL.position.set(11,87.5,23);
+  const mustacheTipR = mustacheTipL.clone(); mustacheTipR.position.x = -11;
+
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(2.2,10,10), skin); nose.position.set(0,92,26);
+  const hairHighlight = new THREE.Mesh(new THREE.SphereGeometry(8,12,12), hairMat); hairHighlight.position.set(-9,112,12); hairHighlight.scale.set(1.4,.5,.7);
+  const cuffL = new THREE.Mesh(new THREE.TorusGeometry(7,1,6,16), shirtMat); cuffL.position.set(39,24,3); cuffL.rotation.y=Math.PI/2;
+  const cuffR = cuffL.clone(); cuffR.position.x=-39;
+  g.add(
+    nose, hairHighlight, cuffL, cuffR,
+    legL, legR, shoeL, shoeR, laceL, laceR, soleL, soleR,
+    body, belt, buckle, shirt, collarPtL, collarPtR, lapelL, lapelR, tie, tieKnot, pocketSq, button1, button2,
+    armL, armR, handL, handR, fingerL1, fingerL2, fingerR1, fingerR2, watchBand, watchFace,
+    head, hair, earL, earR, sideburnL, sideburnR, browL, browR,
+    glassL, glassR, lensL, lensR, glassBridge, templeL, templeR, nosePadL, nosePadR,
+    scleraL, scleraR, irisL, irisR, eyeL, eyeR,
+    mustacheL, mustacheR, mustacheTipL, mustacheTipR
+  );
+  g.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
+  // 家具の間を通りやすいよう、パパだけ横幅・奥行きを少しスリム化（身長は維持）
+  g.scale.set(0.88, 1.0, 0.88);
+  // 捕獲アクション用に腕・手・頭を参照できるようにする
+  g.userData.catchParts = { armL, armR, handL, handR, body, head };
+  return g;
+}
+const playerGroup = buildGirl();
+const dadGroup = buildDad();
+
+function buildMom(){
+  const g = new THREE.Group();
+  const skin = matFromColor(0xf1c7a8,.75);
+  const hair = matFromColor(0x6b4634,.8);
+  const dress = matFromColor(0xc97aa7,.72);
+  const apron = matFromColor(0xf5eee3,.7);
+  const dark = matFromColor(0x49363a,.65);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(25,20,16), skin); head.position.y=100;
+  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(27,20,16,0,Math.PI*2,0,Math.PI*.62), hair); hairCap.position.set(0,105,0);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(30,38,58,18), dress); body.position.y=55;
+  const apronM = new THREE.Mesh(new THREE.BoxGeometry(36,42,3), apron); apronM.position.set(0,58,29);
+  const armL = new THREE.Mesh(new THREE.CylinderGeometry(6,7,48,12), dress); armL.position.set(35,55,0); armL.rotation.z=-0.25;
+  const armR = armL.clone(); armR.position.x=-35; armR.rotation.z=0.25;
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(8,9,42,12), dark); legL.position.set(14,8,0);
+  const legR = legL.clone(); legR.position.x=-14;
+  const shoeL = new THREE.Mesh(new THREE.BoxGeometry(18,7,28), dark); shoeL.position.set(14,-12,8);
+  const shoeR = shoeL.clone(); shoeR.position.x=-14;
+  g.add(head,hairCap,body,apronM,armL,armR,legL,legR,shoeL,shoeR);
+  g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+  g.visible=false;
+  return g;
+}
+const momGroup = buildMom();
+scene.add(playerGroup, dadGroup, momGroup);
+
+const playerBlob = makeBlob(34); scene.add(playerBlob);
+const dadBlob = makeBlob(36); scene.add(dadBlob);
+
+// パパの「見えている範囲」を床に常時表示。
+// 円形ではなく、パパの向いている方向にだけ広がる扇形にする。
+function buildGlowAlphaTexture(){
+  const size = 128;
+  const cnv = document.createElement('canvas'); cnv.width = size; cnv.height = size;
+  const c = cnv.getContext('2d');
+  // dad(頂点/y=0側)に近いほど濃く、外周(y=size側)に行くほどぼやけて消える
+  const grad = c.createLinearGradient(0,0,0,size);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = grad;
+  c.fillRect(0,0,size,size);
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.needsUpdate = true;
+  return tex;
+}
+const dadDangerGlowTex = buildGlowAlphaTexture();
+const dadDangerGroup = new THREE.Group();
+const dadDangerFill = buildVisionFan(310, 45*Math.PI/180);
+dadDangerFill.material.color.set(0xff2e1e);
+dadDangerFill.material.opacity = 0.55;
+dadDangerFill.material.alphaMap = dadDangerGlowTex;
+dadDangerFill.material.blending = THREE.NormalBlending;
+dadDangerFill.position.y = 1.5;
+dadDangerGroup.add(dadDangerFill);
+
+scene.add(dadDangerGroup);
+
+const peekSprite = makeEmojiSprite('👀', 96);
+peekSprite.scale.set(26,26,1); peekSprite.visible = false;
+scene.add(peekSprite);
+
+const dadIndicatorSprite = makeEmojiSprite('❗', 96);
+dadIndicatorSprite.scale.set(28,28,1); dadIndicatorSprite.visible = false;
+scene.add(dadIndicatorSprite);
+const momLabelSprite = makeEmojiSprite('ママ', 96);
+momLabelSprite.scale.set(34,18,1); momLabelSprite.visible = false; // ママの頭上の文字は非表示
+
+// ---------- furniture builders ----------
+function box(w,h,d,mat,x,y,z,opts={}){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  m.position.set(x,y,z);
+  m.castShadow = opts.cast !== false;
+  m.receiveShadow = opts.receive !== false;
+  return m;
+}
+function matFromColor(hex, rough=0.8, metal=0.0){
+  return new THREE.MeshStandardMaterial({color:hex, roughness:rough, metalness:metal});
+}
+function matFromTex(tex, rough=0.85){
+  return new THREE.MeshStandardMaterial({map:tex, roughness:rough});
+}
+
+function buildVaultBox(x,z){
+  const grp = new THREE.Group();
+  const mat = matFromColor(0xb5482f, 0.6);
+  const trim = matFromColor(0xf0ead6, 0.5);
+  const tiers = [ {w:70,h:16,d:50}, {w:58,h:14,d:42}, {w:46,h:14,d:34} ];
+  let y = 0;
+  tiers.forEach((t,i)=>{
+    grp.add(box(t.w,t.h,t.d, i===0?trim:mat, x, y+t.h/2, z));
+    y += t.h;
+  });
+  const sp = makeEmojiSprite('📦', 80); sp.scale.set(20,20,1); sp.position.set(x, y+16, z);
+  grp.add(sp);
+  return grp;
+}
+
+function addArchDetail(group, stage, wallH){
+  const b=stage.bounds, w=b.maxX-b.minX, d=b.maxZ-b.minZ, cx=(b.minX+b.maxX)/2, cz=(b.minZ+b.maxZ)/2;
+  const wood=matFromColor(0x6f4b2e,.65,.05), trim=matFromColor(0xe9dfcf,.6), dark=matFromColor(0x2a2730,.5,.15);
+  // baseboards and crown moulding
+  group.add(box(w,8,6,wood,cx,4,b.minZ+2,{cast:false}));
+  group.add(box(6,8,d,wood,b.minX+2,4,cz,{cast:false}));
+  group.add(box(w,7,7,trim,cx,wallH-5,b.minZ+2,{cast:false}));
+  if(stage.shape==='room') {
+    // curtain/window spans nearly the entire back wall
+    const glass=new THREE.MeshPhysicalMaterial({color:0x8fcbe0,roughness:.08,metalness:.05,transparent:true,opacity:.5,clearcoat:1});
+    const wx = cx;
+    const ww = w-40;
+    const fixedWindow=[];
+    fixedWindow.push(box(ww,72,3,glass,wx,96,b.minZ+1,{cast:false}));
+    fixedWindow.push(box(ww+8,6,6,trim,wx,58,b.minZ+3));
+    fixedWindow.push(box(6,78,5,trim,wx-ww/2,96,b.minZ+3));
+    fixedWindow.push(box(6,78,5,trim,wx+ww/2,96,b.minZ+3));
+    fixedWindow.push(box(ww,5,5,trim,wx,134,b.minZ+3));
+    fixedWindow.push(box(4,72,5,trim,wx,96,b.minZ+5));
+    fixedWindow.push(box(ww,4,5,trim,wx,96,b.minZ+5));
+    fixedWindow.forEach(o=>{o.userData.fixedCurtain=true; group.add(o);});
+  }
+  // ceiling lights removed in V2: the room is intentionally empty except for the fixed curtain/window.
+  // (picture frames removed — the curtain now spans nearly the whole back wall)
+  if(stage.key==='living'){
+    // soft green clover-pattern rugs (dining + living corner), matching the reference's cozy rugs
+    const rugTex = makeGinghamTexture(0xEFEAD2, 0x9ED080);
+    const rug = matFromTex(rugTex,.95);
+    group.add(box(230,2,180, rug, cx, 1, cz+15, {cast:false}));
+    group.add(box(200,2,180, rug, cx+185, 1, cz+40, {cast:false}));
+
+    // ---- living corner (right side): TV mounted on the right wall facing left + floor lamp + corner plant ----
+    group.add(buildPottedPlant(b.maxX-40, b.minZ+35, 1.15));
+    const tvWood = matFromColor(0xC79256,.55,.05);
+    const tvX = b.maxX - 14;
+    group.add(box(30,42,90, tvWood, tvX-16, 21, cz-90));
+    group.add(box(4,52,80, dark, tvX, 62, cz-90));
+    group.add(box(3,44,70, matFromColor(0x1c2932,.2,.3), tvX-3, 62, cz-90));
+    const lampPoleMat = matFromColor(0x2a2a2a,.5);
+    const lampShadeMat = matFromColor(0xfbe9c6,.4);
+    group.add(box(4,80,4, lampPoleMat, cx+272, 40, cz+35));
+    const shadeC = new THREE.Mesh(new THREE.ConeGeometry(16,20,16,1,true), lampShadeMat);
+    shadeC.position.set(cx+272, 84, cz+35); shadeC.castShadow=true; group.add(shadeC);
+    const lampGlow = new THREE.PointLight(0xffe9bb,.6,200,2); lampGlow.position.set(cx+272,78,cz+35); group.add(lampGlow);
+
+    // ---- kitchen run (left wall): a proper counter kitchen — cabinets, one continuous countertop, sink, stovetop, backsplash, open shelf, fridge, stools ----
+    const cabMat = matFromColor(0xF5F1E4,.5);
+    const counterTopMat = matFromColor(0xC79256,.4,.1);
+    const tileTex = makeGinghamTexture(0xEFF5EA, 0x7DB87E);
+    const tileMat = matFromTex(tileTex,.5);
+    const kx = b.minX+34;
+    const counterZFrom = cz-195, counterZTo = cz+75;
+    for(let i=0;i<3;i++){
+      const kz = cz-150+i*90;
+      group.add(box(58,38,46, cabMat, kx, 19, kz));
+    }
+    // one continuous overhanging countertop (reads clearly as "counter")
+    group.add(box(66,5,counterZTo-counterZFrom, counterTopMat, kx, 40, (counterZFrom+counterZTo)/2));
+    // backsplash tile
+    group.add(box(6,64,counterZTo-counterZFrom+20, tileMat, b.minX+2, 62, (counterZFrom+counterZTo)/2, {cast:false}));
+    // sink basin (dark inset) + faucet
+    group.add(box(30,4,26, matFromColor(0x8f9aa0,.35,.4), kx, 41, cz-150));
+    group.add(box(4,16,4, matFromColor(0x9aa0a5,.3,.5), kx-10, 50, cz-158));
+    // stovetop with burners
+    group.add(box(32,3,28, matFromColor(0x232323,.35), kx, 41.5, cz-60));
+    [[-8,-8],[8,-8],[-8,8],[8,8]].forEach(([lx,lz])=>{ group.add(box(6,1,6, matFromColor(0x111111,.3), kx+lx, 43, cz-60+lz)); });
+    // open shelf above the counter with small jars/plant
+    group.add(box(60,4,20, matFromColor(0xC79256,.5,.05), kx, 92, cz-150));
+    group.add(buildPottedPlant(kx-12, cz-152, 0.35));
+    group.add(box(8,14,8, matFromColor(0xdcd3bd,.4), kx+10, 99, cz-150));
+    group.add(box(8,10,8, matFromColor(0xcfa96a,.4), kx+22, 97, cz-150));
+    // fridge
+    group.add(box(54,116,48, matFromColor(0xF2EFE6,.3,.1), kx, 58, cz-225));
+    group.add(box(38,50,3, matFromColor(0x2a2730,.3,.2), kx+27, 88, cz-225));
+    const stoolSeat = matFromColor(0x8FAE63,.62), stoolWood = matFromColor(0xA9683E,.55,.05);
+    [kx+70, kx+70].forEach((sx,i)=>{
+      const sz = cz + (i===0?-30:30);
+      group.add(box(26,4,26, stoolSeat, sx, 32, sz));
+      [[-9,-9],[9,-9],[-9,9],[9,9]].forEach(([lx,lz])=>{ group.add(box(3,28,3, stoolWood, sx+lx, 15, sz+lz)); });
+    });
+  }
+  if(stage.key==='kitchen'){
+    const cab=matFromColor(0xe0c9a6,.5); const counter=matFromColor(0x5f5145,.4,.25);
+    [-190,-95,0,95,190].forEach(x=>{ group.add(box(82,70,44,cab,x,35,-205)); group.add(box(82,8,48,counter,x,72,-205)); group.add(box(4,58,44,wood,x-39,38,-205)); });
+    group.add(box(150,100,50,cab,205,50,-80));
+    // fridge + oven
+    group.add(box(60,150,55,matFromColor(0xcbd4d8,.25,.2),220,75,40)); group.add(box(42,55,3,dark,220,88,68));
+    group.add(box(58,75,50,dark,105,38,-125)); group.add(box(48,5,45,counter,105,77,-125));
+  }
+}
+
+function buildPottedPlant(x,z,scale){
+  const g = new THREE.Group();
+  const potMat = matFromColor(0xC26B4A, 0.6);
+  const leafMat = matFromColor(0x5E9B5A, 0.55);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(14*scale,11*scale,20*scale,16), potMat);
+  pot.position.y = 10*scale; pot.castShadow = true; pot.receiveShadow = true;
+  g.add(pot);
+  for(let i=0;i<6;i++){
+    const a = (i/6)*Math.PI*2;
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(9*scale,34*scale,8), leafMat);
+    leaf.position.set(Math.cos(a)*7*scale, 40*scale, Math.sin(a)*7*scale);
+    leaf.rotation.z = Math.cos(a)*0.35; leaf.rotation.x = Math.sin(a)*0.35;
+    leaf.castShadow = true;
+    g.add(leaf);
+  }
+  const topLeaf = new THREE.Mesh(new THREE.ConeGeometry(10*scale,38*scale,10), leafMat);
+  topLeaf.position.y = 52*scale; topLeaf.castShadow = true;
+  g.add(topLeaf);
+  g.position.set(x,0,z);
+  return g;
+}
+
+function buildDiningSet(stage){
+  const group = new THREE.Group();
+  const cake = stage.cake;
+  const woodMat = matFromColor(0xA9683E, 0.55, 0.08);
+  const chairSeatMat = matFromColor(0x8FAE63, 0.62);
+  const clothTex = makeGinghamTexture(0xF7D98A, 0xD99A3E);
+  const clothMat = matFromTex(clothTex, 0.7);
+  const ty = 46;
+  const cakeGroup = new THREE.Group();
+  const frostingMat = new THREE.MeshStandardMaterial({color:0xffeee0, roughness:0.5});
+  const spongeMat = new THREE.MeshStandardMaterial({color:0xf3d48a, roughness:0.6});
+  const berryMat = new THREE.MeshStandardMaterial({color:0xe23a4e, roughness:0.35});
+  const leafMat = new THREE.MeshStandardMaterial({color:0x4caf6b, roughness:0.5});
+  const plateMat = matFromColor(0xffffff, 0.3, 0.1);
+
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(30,30,2,28), plateMat);
+  plate.position.y = ty+5;
+  cakeGroup.add(plate);
+
+  // 5 separate slices: each bite removes one slice rather than shrinking the whole cake.
+  for(let i=0;i<5;i++){
+    const slice = new THREE.Group();
+    slice.userData.cakeSliceIndex = i;
+    const a0 = (i/5)*Math.PI*2 + 0.02;
+    const aLen = Math.PI*2/5 - 0.04;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(23,24,16,12,1,a0,aLen), spongeMat);
+    base.position.y = ty+14; slice.add(base);
+    const cream = new THREE.Mesh(new THREE.CylinderGeometry(23.5,24.5,5,12,1,a0,aLen), frostingMat);
+    cream.position.y = ty+24; slice.add(cream);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(16,17,8,12,1,a0,aLen), frostingMat);
+    top.position.y = ty+30; slice.add(top);
+    const midA = a0 + aLen*0.55;
+    const berry = new THREE.Mesh(new THREE.SphereGeometry(3.5,10,10), berryMat);
+    berry.position.set(Math.cos(midA)*10, ty+36, Math.sin(midA)*10); slice.add(berry);
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(2,3,6), leafMat);
+    leaf.position.set(Math.cos(midA)*10, ty+39, Math.sin(midA)*10); slice.add(leaf);
+    slice.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+    cakeGroup.add(slice);
+  }
+
+  cakeGroup.position.set(cake.x, 0, cake.z);
+  group.add(cakeGroup);
+  cake._group = cakeGroup;
+
+  const promptSprite = makeEmojiSprite('🍰', 96);
+  promptSprite.scale.set(26,26,1);
+  promptSprite.position.set(cake.x, ty+62, cake.z);
+  group.add(promptSprite);
+  cake._promptSprite = promptSprite;
+
+  return group;
+}
+
+function buildStageScene(stage){
+  const group = new THREE.Group();
+  const b = stage.bounds;
+  const w = b.maxX-b.minX, d = b.maxZ-b.minZ;
+  const cx = (b.minX+b.maxX)/2, cz = (b.minZ+b.maxZ)/2;
+
+  const floorTex = makeFloorTexture(stage.floorColor);
+  floorTex.repeat.set(w/140, d/140);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), matFromTex(floorTex, 0.85));
+  floor.rotation.x = -Math.PI/2; floor.position.set(cx,0,cz);
+  floor.receiveShadow = true;
+  floor.userData.editorLocked = true;
+  floor.userData.editorLabel = '床';
+  group.add(floor);
+
+  const wallTex = makeWallTexture(stage.wallColor);
+  const wallH = 175;
+  const wallMatMake = (repeatX) => { const t=wallTex.clone(); t.needsUpdate=true; t.repeat.set(repeatX,1); return matFromTex(t,0.9); };
+
+  if(stage.shape === 'room'){
+    const wallN = box(w+16, wallH, 10, wallMatMake(w/160), cx, wallH/2, b.minZ-5, {cast:false}); wallN.userData.editorLocked=true; wallN.userData.editorLabel='壁'; group.add(wallN);
+    const wallW = box(10, wallH, d+16, wallMatMake(d/160), b.minX-5, wallH/2, cz, {cast:false}); wallW.userData.editorLocked=true; wallW.userData.editorLabel='壁'; group.add(wallW);
+  } else {
+    group.add(box(10, wallH, d+16, wallMatMake(d/160), b.minX-5, wallH/2, cz, {cast:false}));
+    group.add(box(10, wallH, d+16, wallMatMake(d/160), b.maxX+5, wallH/2, cz, {cast:false}));
+    group.add(box(w+30, wallH, 10, wallMatMake(1), cx, wallH/2, b.minZ-5, {cast:false}));
+    const stepMat = matFromColor(0x8a7454, 0.85);
+    for(let i=0;i<6;i++){
+      group.add(box(w*0.5, 14, 22, stepMat, cx, 10+i*14, b.minZ+20+i*20));
+    }
+  }
+
+  const curtainRodMat = matFromColor(0x8A5738, 0.5, 0.2);
+  stage.hidingSpots.forEach(s=>{
+    if(s.type === 'curtain'){
+      const curtainTex = makeGinghamTexture(0xEFD9B5, 0x789A61);
+      const curtainParts=[];
+      curtainParts.push(box(540,150,8, matFromTex(curtainTex,0.75), s.x, 78, s.z));
+      curtainParts.push(box(556,8,12, curtainRodMat, s.x, 155, s.z));
+      const finialL = new THREE.Mesh(new THREE.SphereGeometry(9,12,12), curtainRodMat);
+      finialL.position.set(s.x-278,155,s.z); curtainParts.push(finialL);
+      const finialR = new THREE.Mesh(new THREE.SphereGeometry(9,12,12), curtainRodMat);
+      finialR.position.set(s.x+278,155,s.z); curtainParts.push(finialR);
+      curtainParts.forEach(o=>{o.userData.fixedCurtain=true; group.add(o);});
+    } else if(s.type === 'sofa'){
+      const fab = matFromTex(makeFabricTexture(0xD9C7A9), 0.9);
+      group.add(box(55,40,90, fab, s.x, 20, s.z));
+      group.add(box(12,40,90, fab, s.x-25, 40, s.z));
+    } else if(s.type === 'shelf'){
+      group.add(box(20,150,90, matFromColor(0xC89B62,0.7), s.x, 75, s.z));
+    } else if(s.type === 'pantry'){
+      group.add(box(16,160,80, matFromColor(0xd8d0c0,0.6), s.x, 80, s.z));
+    } else if(s.type === 'basket'){
+      group.add(box(46,42,46, matFromColor(0xdfd2a8,1), s.x, 21, s.z));
+    }
+    const sp = makeEmojiSprite(s.emoji, 96); sp.scale.set(30,30,1); sp.position.set(s.x, 96, s.z);
+    group.add(sp); s._sprite = sp;
+  });
+
+  group.add(buildDiningSet(stage));
+
+
+  addArchDetail(group, stage, wallH);
+  return group;
+}
+
+// ================= Game State =================
+let state = 'menu';
+let stageIdx = 0, lives = 1, score = 0;
+let stage = null, timeLeft = 0;
+let detection = 0;
+let flashAlpha = 0;
+let beepCooldown = 0;
+let cakeBites = 0;
+let cakesEaten = 0;
+let cakeDeliveryTimer = 0;
+let momAlertTimer = 0;
+let momAlerted = false;
+let cakeCombo = 0;
+let cakeFxBursts = [];
+
+const player = { x:0, z:0, hidden:false, hideSpotIdx:-1, doingMischief:false, mischiefProgress:0, yaw:0,
+  jumping:false, jumpTime:0, jumpArc:0, groundY:0,
+  sliding:false, slideTime:0, slideDir:{x:0,z:1},
+  crouching:false,
+  vaulting:false, vaultTime:0, vaultFrom:{x:0,z:0}, vaultTo:{x:0,z:0} };
+const JUMP_DURATION = 0.5, JUMP_HEIGHT = 82;
+const SLIDE_DURATION = 0.4, SLIDE_SPEED = 390;
+const VAULT_DURATION = 0.46, VAULT_DIST = 50, VAULT_HEIGHT = 48;
+let camShake = 0;
+function addShake(v){ camShake = Math.max(camShake, v); }
+const dad = { x:0, z:0, wp:0, navIndex:0, navPath:[], facingAngle:0, mode:'move', lookTimer:0, lookBase:0, sweep:0,
+  tempoMode:'normal', tempoTimer:3, sprintTimer:0, stuckTimer:0, lastX:0, lastZ:0, chaseRepathTimer:0, alerted:false };
+let camYawSmooth = 0;
+let dadWalkMap = null;
+const DAD_NAV_CELL = 18;
+const DAD_NAV_MARGIN = 18;
+let obstacles = [];
+let roombaGroup = null;
+const roomba = {x:20,z:170,prevX:20,prevZ:170,dx:1,dz:0.35,speed:42,radius:24,topY:12};
+function buildRoomba(){
+  const g=new THREE.Group();
+  const body=matFromColor(0x45484B,.35,.35);
+  const rim=matFromColor(0xD5D0C5,.5,.08);
+  const dark=matFromColor(0x17191B,.2,.35);
+  const disc=new THREE.Mesh(new THREE.CylinderGeometry(24,24,8,32),body);
+  disc.position.y=4; disc.castShadow=true; disc.receiveShadow=true; g.add(disc);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(19,2.2,8,32),rim);
+  ring.position.y=8; ring.castShadow=true; g.add(ring);
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(15,15,2,32),dark);
+  top.position.y=9; g.add(top);
+  const button=new THREE.Mesh(new THREE.CylinderGeometry(3,3,2,16),rim);
+  button.position.set(7,10,0); g.add(button);
+  g.position.set(roomba.x,0,roomba.z);
+  g.userData.editorLocked=true; g.userData.editorLabel='ルンバ';
+  return g;
+}
+function updateRoomba(dt){
+  if(stage.key!=='living' || !roombaGroup) return;
+  roomba.prevX=roomba.x; roomba.prevZ=roomba.z;
+  const oldX=roomba.x, oldZ=roomba.z;
+  roomba.x += roomba.dx*roomba.speed*dt;
+  roomba.z += roomba.dz*roomba.speed*dt;
+  const minX=stage.bounds.minX+35,maxX=stage.bounds.maxX-35,minZ=stage.bounds.minZ+35,maxZ=stage.bounds.maxZ-35;
+  if(roomba.x<minX || roomba.x>maxX){roomba.x=clamp(roomba.x,minX,maxX);roomba.dx*=-1;}
+  if(roomba.z<minZ || roomba.z>maxZ){roomba.z=clamp(roomba.z,minZ,maxZ);roomba.dz*=-1;}
+  const len=Math.hypot(roomba.dx,roomba.dz)||1; roomba.dx/=len; roomba.dz/=len;
+  roombaGroup.position.set(roomba.x,0,roomba.z);
+  roombaGroup.rotation.y += dt*1.8;
+  const ro = obstacles.find(o=>o.roomba);
+  if(ro){
+    ro.minX=roomba.x-roomba.radius; ro.maxX=roomba.x+roomba.radius;
+    ro.minZ=roomba.z-roomba.radius; ro.maxZ=roomba.z+roomba.radius;
+  }
+  // Carry the player when standing on the Roomba.
+  const wasOn=Math.hypot(player.x-oldX,player.z-oldZ)<roomba.radius+15 && Math.abs((player.groundY||0)-roomba.topY)<3 && !player.jumping && !player.vaulting;
+  if(wasOn){
+    player.x += roomba.x-oldX; player.z += roomba.z-oldZ;
+    player.x=clamp(player.x,stage.bounds.minX+18,stage.bounds.maxX-18);
+    player.z=clamp(player.z,stage.bounds.minZ+18,stage.bounds.maxZ-18);
+  }
+}
+function getObstacleTopAt(x, z){
+  const r = 14;
+  let top = 0;
+  if(stage && stage.key==='living' && roombaGroup){
+    const rr = roomba.radius + r;
+    if(Math.hypot(x-roomba.x,z-roomba.z) <= rr) top = Math.max(top, roomba.topY);
+  }
+  for(const o of obstacles){
+    if(x + r > o.minX && x - r < o.maxX && z + r > o.minZ && z - r < o.maxZ){
+      top = Math.max(top, o.topY || 0);
+    }
+  }
+  return top;
+}
+function getSupportTopAt(x, z){
+  const r = 14;
+  let top = 0;
+  if(stage && stage.key==='living' && roombaGroup){
+    const rr = roomba.radius + r;
+    if(Math.hypot(x-roomba.x,z-roomba.z) <= rr) top = Math.max(top, roomba.topY);
+  }
+  for(const o of obstacles){
+    if(x + r > o.minX && x - r < o.maxX && z + r > o.minZ && z - r < o.maxZ){
+      top = Math.max(top, o.topY || 0);
+    }
+  }
+  return top;
+}
+function isBlockedAt(x, z){
+  const r = 14;
+  const candidateTop = getSupportTopAt(x, z);
+  const currentTop = player.groundY || 0;
+
+  for(const o of obstacles){
+    if(x + r > o.minX && x - r < o.maxX && z + r > o.minZ && z - r < o.maxZ){
+      const topY = o.topY || 0;
+
+      // Moving around on the same surface is allowed.
+      if(topY <= currentTop + 4) continue;
+
+      // If the destination is on a lower surface (or the floor), stepping
+      // off the current object is allowed; groundY is updated after moving.
+      if(candidateTop < currentTop - 4) continue;
+
+      // During a jump, only pass through once the player's feet are above
+      // the obstacle top. Otherwise the obstacle blocks the horizontal move.
+      if(player.jumping || player.vaulting){
+        if(currentTop + (player.jumpArc || 0) >= topY - 2) continue;
+        return true;
+      }
+      if(player.sliding && o.allowSlide) continue;
+      if(player.crouching && o.allowCrouch) continue;
+      return true;
+    }
+  }
+  return false;
+}
+function moveWithCollision(dirX, dirZ){
+  const newX = player.x + dirX;
+  if(!isBlockedAt(newX, player.z)){
+    player.x = newX;
+    player.groundY = getSupportTopAt(player.x, player.z);
+  }
+  const newZ = player.z + dirZ;
+  if(!isBlockedAt(player.x, newZ)){
+    player.z = newZ;
+    player.groundY = getSupportTopAt(player.x, player.z);
+  }
+}
+let camPosCurrent = {x:0,y:400,z:400};
+
+function dadNavBlocked(x,z){
+  const b=stage.bounds;
+  const r=DAD_NAV_MARGIN;
+  if(x < b.minX+r || x > b.maxX-r || z < b.minZ+r || z > b.maxZ-r) return true;
+  for(const o of obstacles){
+    if(o.roomba || o.editorType==='carpet') continue;
+    if(x > o.minX-r && x < o.maxX+r && z > o.minZ-r && z < o.maxZ+r) return true;
+  }
+  return false;
+}
+function dadNavBuild(){
+  const b=stage.bounds, cell=DAD_NAV_CELL;
+  const minX=Math.ceil((b.minX+DAD_NAV_MARGIN)/cell)*cell;
+  const maxX=Math.floor((b.maxX-DAD_NAV_MARGIN)/cell)*cell;
+  const minZ=Math.ceil((b.minZ+DAD_NAV_MARGIN)/cell)*cell;
+  const maxZ=Math.floor((b.maxZ-DAD_NAV_MARGIN)/cell)*cell;
+  const cols=Math.floor((maxX-minX)/cell)+1, rows=Math.floor((maxZ-minZ)/cell)+1;
+  const walk=new Uint8Array(cols*rows);
+  for(let iz=0;iz<rows;iz++) for(let ix=0;ix<cols;ix++){
+    const x=minX+ix*cell, z=minZ+iz*cell;
+    walk[iz*cols+ix]=dadNavBlocked(x,z)?0:1;
+  }
+  dadWalkMap={cell,minX,minZ,cols,rows,walk};
+}
+function dadNavNearest(x,z){
+  if(!dadWalkMap) return null;
+  const m=dadWalkMap;
+  let ix=Math.round((x-m.minX)/m.cell), iz=Math.round((z-m.minZ)/m.cell);
+  ix=clamp(ix,0,m.cols-1); iz=clamp(iz,0,m.rows-1);
+  if(m.walk[iz*m.cols+ix]) return {ix,iz,x:m.minX+ix*m.cell,z:m.minZ+iz*m.cell};
+  for(let rad=1;rad<Math.max(m.cols,m.rows);rad++){
+    let best=null,bd=Infinity;
+    for(let dz=-rad;dz<=rad;dz++) for(let dx=-rad;dx<=rad;dx++){
+      if(Math.abs(dx)!==rad && Math.abs(dz)!==rad) continue;
+      const nx=ix+dx,nz=iz+dz;
+      if(nx<0||nx>=m.cols||nz<0||nz>=m.rows||!m.walk[nz*m.cols+nx]) continue;
+      const dd=(nx-ix)**2+(nz-iz)**2;
+      if(dd<bd){bd=dd;best={ix:nx,iz:nz,x:m.minX+nx*m.cell,z:m.minZ+nz*m.cell};}
+    }
+    if(best) return best;
+  }
+  return null;
+}
+function dadNavPathTo(tx,tz){
+  if(!dadWalkMap) dadNavBuild();
+  const m=dadWalkMap, start=dadNavNearest(dad.x,dad.z), goal=dadNavNearest(tx,tz);
+  if(!start||!goal) return [];
+  // ルンバは静的なナビマップには焼き込まれていない(常に動くため)。
+  // ここで現在位置だけを一時的な障害物として扱い、経路探索がルンバを迂回できるようにする。
+  const roombaActive = stage.key==='living' && roombaGroup;
+  const roombaBlockR = roomba.radius + DAD_NAV_MARGIN;
+  const roombaBlocksCell=(ix,iz)=>{
+    if(!roombaActive) return false;
+    const x=m.minX+ix*m.cell, z=m.minZ+iz*m.cell;
+    return Math.hypot(x-roomba.x,z-roomba.z) < roombaBlockR;
+  };
+  const key=(x,z)=>z*m.cols+x;
+  const startK=key(start.ix,start.iz), goalK=key(goal.ix,goal.iz);
+  const open=[{ix:start.ix,iz:start.iz,f:0,g:0}];
+  const came=new Map(), gScore=new Map([[startK,0]]), closed=new Set();
+  const dirs=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  while(open.length){
+    let bi=0; for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i;
+    const cur=open.splice(bi,1)[0], ck=key(cur.ix,cur.iz);
+    if(closed.has(ck)) continue; closed.add(ck);
+    if(ck===goalK) break;
+    for(const [dx,dz] of dirs){
+      const nx=cur.ix+dx,nz=cur.iz+dz;
+      if(nx<0||nx>=m.cols||nz<0||nz>=m.rows||!m.walk[nz*m.cols+nx]) continue;
+      if(dx!==0&&dz!==0 && (!m.walk[cur.iz*m.cols+(cur.ix+dx)] || !m.walk[(cur.iz+dz)*m.cols+cur.ix])) continue;
+      if(roombaBlocksCell(nx,nz)) continue;
+      const nk=key(nx,nz), ng=cur.g+((dx&&dz)?1.414:1);
+      if(ng >= (gScore.get(nk)??Infinity)) continue;
+      gScore.set(nk,ng); came.set(nk,ck);
+      const h=Math.hypot(goal.ix-nx,goal.iz-nz);
+      open.push({ix:nx,iz:nz,g:ng,f:ng+h});
+    }
+  }
+  if(startK!==goalK && !came.has(goalK)) return [];
+  const cells=[]; let k=goalK;
+  while(true){
+    const iz=Math.floor(k/m.cols), ix=k-iz*m.cols;
+    cells.push({x:m.minX+ix*m.cell,z:m.minZ+iz*m.cell});
+    if(k===startK) break;
+    k=came.get(k); if(k==null) return [];
+  }
+  cells.reverse();
+  // Remove unnecessary zig-zags while preserving collision-free straight segments.
+  const clearSegment=(a,b)=>{
+    const dist=Math.hypot(b.x-a.x,b.z-a.z), n=Math.max(2,Math.ceil(dist/(m.cell*0.45)));
+    for(let i=1;i<n;i++){
+      const t=i/n, x=a.x+(b.x-a.x)*t, z=a.z+(b.z-a.z)*t;
+      if(dadNavBlocked(x,z)) return false;
+    }
+    return true;
+  };
+  const simp=[cells[0]]; let i=0;
+  while(i<cells.length-1){
+    let j=cells.length-1;
+    while(j>i+1 && !clearSegment(cells[i],cells[j])) j--;
+    simp.push(cells[j]); i=j;
+  }
+  return simp;
+}
+function dadSetNextRoute(){
+  const path=stage.dad.path;
+  if(!path.length) return;
+  let tries=0;
+  while(tries<path.length){
+    const target=path[dad.wp%path.length];
+    const nav=dadNavPathTo(target.x,target.z);
+    if(nav.length){ dad.navPath=nav; dad.navIndex=nav.length>1?1:0; return; }
+    dad.wp=(dad.wp+1)%path.length; tries++;
+  }
+  dad.navPath=[]; dad.navIndex=0;
+}
+
+function setupStage(i){
+  stage = STAGES[i];
+  timeLeft = 0;
+  detection = 0;
+  const curtainStart = stage.hidingSpots.findIndex(s=>s.type==='curtain');
+  if(curtainStart>=0){ player.x=stage.hidingSpots[curtainStart].x; player.z=stage.hidingSpots[curtainStart].z; player.hidden=true; player.hideSpotIdx=curtainStart; }
+  else { player.x=stage.playerStart.x; player.z=stage.playerStart.z; player.hidden=false; player.hideSpotIdx=-1; }
+  player.doingMischief = false; player.mischiefProgress = 0;
+  player.jumping = false; player.jumpTime = 0; player.jumpArc = 0; player.groundY = 0;
+  player.sliding = false; player.slideTime = 0; player.crouching = false;
+  player.vaulting = false; player.vaultTime = 0;
+
+  // Furniture and the moving Roomba define the traversable obstacles.
+  obstacles = [
+    { minX: stage.cake.x-54, maxX: stage.cake.x+54, minZ: stage.cake.z-44, maxZ: stage.cake.z+44, allowSlide:true, allowCrouch:true, topY:48 },
+    { minX: stage.cake.x-22, maxX: stage.cake.x+22, minZ: stage.cake.z+34, maxZ: stage.cake.z+78, allowSlide:true, topY:48 },
+    { minX: stage.cake.x-22, maxX: stage.cake.x+22, minZ: stage.cake.z-78, maxZ: stage.cake.z-34, allowSlide:true, topY:48 },
+    { minX: stage.cake.x+31, maxX: stage.cake.x+76, minZ: stage.cake.z-22, maxZ: stage.cake.z+22, allowSlide:true, topY:48 },
+    { minX: stage.cake.x-76, maxX: stage.cake.x-31, minZ: stage.cake.z-22, maxZ: stage.cake.z+22, allowSlide:true }
+  ];
+  if(stage.key === 'kitchen'){
+    [-190,-95,0,95,190].forEach(x=>{
+      obstacles.push({minX:x-41,maxX:x+41,minZ:-227,maxZ:-183,allowSlide:true,topY:45});
+    });
+    obstacles.push({minX:130,maxX:280,minZ:-105,maxZ:-55,allowSlide:true,topY:58});
+    obstacles.push({minX:190,maxX:250,minZ:12,maxZ:67,allowSlide:true,topY:90});
+    obstacles.push({minX:76,maxX:134,minZ:-150,maxZ:-100,allowSlide:true,topY:52});
+  }
+  if(stage.key === 'living'){ /* V2 furniture is registered after editor placement. */ }
+
+  const fwd0 = norm2({x: stage.camLook.x-stage.camPos.x, z: stage.camLook.z-stage.camPos.z});
+  camYawSmooth = Math.atan2(fwd0.x, fwd0.z);
+  player.yaw = camYawSmooth;
+
+  const curtain = stage.hidingSpots.find(s=>s.type==='curtain');
+  dad.x = curtain ? curtain.x : stage.dad.path[0].x;
+  dad.z = curtain ? curtain.z + 32 : stage.dad.path[0].z;
+  dad.lastX = dad.x; dad.lastZ = dad.z; dad.stuckTimer = 0;
+  dadGroup.visible = true;
+  dad.wp = 0;
+  dad.facingAngle = 0; dad.mode = 'move'; dad.lookTimer = 0; dad.sweep = 0;
+  dad.tempoMode = 'normal'; dad.tempoTimer = 2 + Math.random()*2; dad.sprintTimer = 0;
+  cakeBites = 0;
+  cakesEaten = 0;
+  cakeDeliveryTimer = 0;
+  momGroup.visible = false;
+  momLabelSprite.visible = false;
+
+  scene.remove(stageGroup);
+  stageGroup = buildStageScene(stage);
+  stageGroup.children.forEach((o,i)=>{
+    if(o.userData.editorLocked) return;
+    o.userData.editorId = o.userData.editorId || `${stage.key}:child:${i}`;
+    if(!o.userData.editorLabel) o.userData.editorLabel = o.name || `オブジェクト ${i+1}`;
+  });
+  scene.add(stageGroup);
+  if(stage.key==='living'){
+    roomba.x=20; roomba.z=170; roomba.dx=0.82; roomba.dz=0.57;
+    const len=Math.hypot(roomba.dx,roomba.dz); roomba.dx/=len; roomba.dz/=len;
+    roombaGroup=buildRoomba(); stageGroup.add(roombaGroup);
+    obstacles.push({minX:roomba.x-roomba.radius,maxX:roomba.x+roomba.radius,minZ:roomba.z-roomba.radius,maxZ:roomba.z+roomba.radius,allowSlide:false,topY:roomba.topY,roomba:true});
+  } else roombaGroup=null;
+  if(typeof editorInitV2 === 'function') editorInitV2();
+  dadNavBuild();
+  dadSetNextRoute();
+  updateCakeVisual();
+
+  if(dadVisionFan){ dadLightPivot.remove(dadVisionFan); dadVisionFan.geometry.dispose(); dadVisionFan.material.dispose(); }
+  dadVisionFan = buildVisionFan(stage.dad.visionRange, stage.dad.visionAngle/2);
+  dadLightPivot.add(dadVisionFan);
+
+  const brightFog = shade(stage.fogColor, 0);
+  scene.fog = new THREE.Fog(brightFog, 700, 1900);
+  renderer.setClearColor(brightFog, 1);
+  hemi.groundColor.setHex(shadeHexNum(stage.ambient, 0));
+
+  sun.position.set(stage.sun.x, stage.sun.y, stage.sun.z);
+  sun.target.position.set((stage.bounds.minX+stage.bounds.maxX)/2, 0, (stage.bounds.minZ+stage.bounds.maxZ)/2);
+
+  camPosCurrent = {x: stage.camPos.x, y: stage.camPos.y, z: stage.camPos.z};
+  camera.position.set(stage.camPos.x, stage.camPos.y, stage.camPos.z);
+  camera.fov = stage.fov;
+  camera.updateProjectionMatrix();
+  camera.lookAt(stage.camLook.x, stage.camLook.y, stage.camLook.z);
+
+  renderMissionList();
+}
+
+function updateCakeVisual(){
+  const cake = stage.cake;
+  const remaining = Math.max(0, cake.maxBites - cakeBites);
+  if(cake && cake._group){
+    cake._group.scale.setScalar(1);
+    cake._group.visible = cakeDeliveryTimer <= 0;
+    cake._group.traverse(o=>{
+      if(o.userData && Number.isInteger(o.userData.cakeSliceIndex)){
+        o.visible = o.userData.cakeSliceIndex < remaining;
+      }
+    });
+    if(cake._promptSprite) cake._promptSprite.visible = remaining > 0 && cakeDeliveryTimer <= 0;
+  }
+  if(stage.key==='living' && typeof editorPlaced!=='undefined'){
+    editorPlaced.forEach(u=>{
+      if(u.type!=='kitchen_table') return;
+      u.root.traverse(o=>{
+        if(o.userData && o.userData.v2CakeVisual){
+          o.scale.setScalar(1);
+          o.visible = cakeDeliveryTimer <= 0;
+        }
+        if(o.userData && Number.isInteger(o.userData.v2CakeSliceIndex)){
+          o.visible = o.userData.v2CakeSliceIndex < remaining && cakeDeliveryTimer <= 0;
+        }
+      });
+    });
+  }
+}
+function showCakeDeliveryNotice(){
+  const el=document.getElementById('alertLabel');
+  const old=el.textContent;
+  el.textContent='ママが新しいケーキを持ってくる！';
+  el.style.color='#ffe6a8';
+  setTimeout(()=>{ if(el){ el.textContent='けいかいど'; el.style.color=''; } },1800);
+}
+
+function renderMissionList(){
+  const el = document.getElementById('missionList');
+  el.innerHTML = '';
+  const d = document.createElement('div');
+  d.className = 'missionChip' + (cakeBites >= stage.cake.maxBites ? ' done' : '');
+  d.textContent = `🍰 ${cakeBites}/${stage.cake.maxBites}` + (cakesEaten ? `  CLEAR ×${cakesEaten}` : '');
+  el.appendChild(d);
+}
+function resetRunToMenu(){ stageIdx = 0; lives = 1; score = 0; cakesEaten = 0; cakeDeliveryTimer = 0; momAlertTimer = 0; momAlerted = false; cakeCombo = 0; cakeFxBursts.length = 0; setupStage(0); }
+function updateLivesUI(){ /* 残機は画面に表示しない */ }
+
+// ================= Input =================
+let move = {x:0,y:0};
+const keys = {};
+window.addEventListener('keydown', e=>{ if(editorMode) return; keys[e.key.toLowerCase()] = true; if(e.key===' '){ e.preventDefault(); onAction(); } });
+window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
+function keyboardVector(){
+  let x=0,y=0;
+  if(keys['arrowleft']||keys['a']) x-=1;
+  if(keys['arrowright']||keys['d']) x+=1;
+  if(keys['arrowup']||keys['w']) y-=1;
+  if(keys['arrowdown']||keys['s']) y+=1;
+  return {x,y};
+}
+
+const joyBase = document.getElementById('joyBase');
+const joyKnob = document.getElementById('joyKnob');
+let joyActive=false, joyId=null;
+const JOY_R = 42;
+function joyReset(){ joyKnob.style.left='34px'; joyKnob.style.top='34px'; move.x=0; move.y=0; }
+joyBase.addEventListener('pointerdown', e=>{ joyActive=true; joyId=e.pointerId; joyBase.setPointerCapture(e.pointerId); updateJoy(e); });
+joyBase.addEventListener('pointermove', e=>{ if(joyActive && e.pointerId===joyId) updateJoy(e); });
+function endJoy(e){ if(e.pointerId===joyId){ joyActive=false; joyId=null; joyReset(); } }
+joyBase.addEventListener('pointerup', endJoy);
+joyBase.addEventListener('pointercancel', endJoy);
+function updateJoy(e){
+  const rect = joyBase.getBoundingClientRect();
+  const cx = rect.left+rect.width/2, cy = rect.top+rect.height/2;
+  let dx = e.clientX-cx, dy = e.clientY-cy;
+  const d = Math.hypot(dx,dy);
+  const clamped = Math.min(d, JOY_R);
+  const ang = Math.atan2(dy,dx);
+  joyKnob.style.left = (34+Math.cos(ang)*clamped)+'px';
+  joyKnob.style.top = (34+Math.sin(ang)*clamped)+'px';
+  move.x = clamped>8 ? Math.cos(ang)*Math.min(1,d/JOY_R) : 0;
+  move.y = clamped>8 ? Math.sin(ang)*Math.min(1,d/JOY_R) : 0;
+}
+
+const actionBtn = document.getElementById('actionBtn');
+let currentAction = null;
+actionBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); actionBtn.classList.add('active'); onAction(); });
+actionBtn.addEventListener('pointerup', ()=>actionBtn.classList.remove('active'));
+actionBtn.addEventListener('pointercancel', ()=>actionBtn.classList.remove('active'));
+
+function syncHidingSpots(){
+  // Hiding locations must follow the actual editor furniture positions.
+  // The old version used fixed coordinates, so the hide button could appear
+  // in empty space after furniture was moved.
+  if(!stage) return;
+  const spots = [{x:0,z:-282,type:'curtain',emoji:'🪟',name:'カーテン',width:480}];
+  const sofa = [...editorPlaced.values()].find(u=>u.type==='sofa' && editorUnitIsVisible(u));
+  if(sofa){
+    const pos = editorUnitPosition(sofa);
+    spots.push({x:pos.x,z:pos.z,type:'sofa',emoji:'🛋️',name:'ソファ'});
+  }
+  const shelf = [...editorPlaced.values()].find(u=>u.type==='bookshelf' && editorUnitIsVisible(u));
+  if(shelf){
+    const pos = editorUnitPosition(shelf);
+    spots.push({x:pos.x,z:pos.z,type:'shelf',emoji:'📚',name:'本棚'});
+  }
+  stage.hidingSpots = spots;
+}
+
+function computeAction(){
+  if(state !== 'playing' || player.doingMischief || player.jumping || player.sliding || player.vaulting){ currentAction=null; return; }
+  if(player.hidden){ currentAction = {type:'unhide'}; return; }
+  if(cakeBites < stage.cake.maxBites && dist2(player.x,player.z,stage.cake.x,stage.cake.z) < stage.cake.r){
+    currentAction = {type:'eat'}; return;
+  }
+  for(let i=0;i<stage.hidingSpots.length;i++){
+    const s = stage.hidingSpots[i];
+    if(dist2(player.x,player.z,s.x,s.z) < 55) { currentAction = {type:'hide', idx:i}; return; }
+  }
+  currentAction = null;
+}
+function updateActionButtonLabel(){
+  if(!currentAction){ actionBtn.textContent='-'; actionBtn.classList.add('disabled'); return; }
+  actionBtn.classList.remove('disabled');
+  if(currentAction.type==='hide') actionBtn.textContent='かくれる';
+  else if(currentAction.type==='unhide') actionBtn.textContent='出る';
+  else if(currentAction.type==='eat') actionBtn.textContent = 'たべる!\n🍰';
+}
+function onAction(){
+  if(state !== 'playing' || !currentAction) return;
+  if(currentAction.type==='hide'){
+    player.hidden = true; player.hideSpotIdx = currentAction.idx;
+    const s = stage.hidingSpots[currentAction.idx];
+    player.x = s.x; player.z = s.z;
+    sfxHide();
+  } else if(currentAction.type==='unhide'){
+    player.hidden = false; player.hideSpotIdx = -1;
+    sfxHide();
+  } else if(currentAction.type==='eat'){
+    player.doingMischief = true; player.mischiefProgress = 0;
+  }
+}
+
+function doJump(){
+  if(state !== 'playing' || player.hidden || player.doingMischief || player.jumping || player.sliding || player.vaulting) return;
+  player.jumping = true; player.jumpTime = 0;
+  sfxJump();
+  addShake(0.3);
+}
+function doCrouch(){
+  if(state !== 'playing' || player.hidden || player.doingMischief || player.jumping || player.vaulting) return;
+  player.crouching = !player.crouching;
+  if(player.crouching) sfxHide();
+}
+const jumpBtn = document.getElementById('jumpBtn');
+const crouchBtn = document.getElementById('crouchBtn');
+jumpBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); jumpBtn.classList.add('active'); doJump(); });
+jumpBtn.addEventListener('pointerup', ()=>jumpBtn.classList.remove('active'));
+jumpBtn.addEventListener('pointercancel', ()=>jumpBtn.classList.remove('active'));
+crouchBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); crouchBtn.classList.add('active'); doCrouch(); crouchBtn.classList.toggle('active', player.crouching); });
+crouchBtn.addEventListener('pointerup', ()=>crouchBtn.classList.toggle('active', player.crouching));
+crouchBtn.addEventListener('pointercancel', ()=>crouchBtn.classList.toggle('active', player.crouching));
+window.addEventListener('keydown', e=>{
+  if(e.key.toLowerCase()==='j'){ doJump(); }
+  if(e.key.toLowerCase()==='k'){ doCrouch(); }
+});
+
+// ================= Overlays =================
+const overlay = document.getElementById('overlay');
+function showOverlay(html){ overlay.innerHTML = html; overlay.classList.remove('hidden'); }
+function hideOverlay(){ overlay.classList.add('hidden'); }
+
+function goMenu(){
+  state = 'menu';
+  showOverlay(`
+    <div class="bigEmoji">🍰</div>
+    <h1>パパにはないしょ! 3D</h1>
+    <p>パパが帰ってきた!テーブルの上のケーキを、こっそりどれだけ食べられるかな?<br>
+    パパの視界(オレンジの輪)に入ると「！」が出て、パパが近づいてくる。捕まったらアウト!</p>
+    <p>左スティックで移動・右ボタンで「隠れる/出る/食べる」</p>
+    <button class="btn" id="startBtn2">タップしてスタート</button>
+  `);
+  document.getElementById('startBtn2').addEventListener('click', ()=>{ ensureAudio(); resetRunToMenu(); goIntro(); });
+}
+function goIntro(){
+  state = 'intro';
+  const s = stage;
+  showOverlay(`
+    <div class="bigEmoji">🏠</div>
+    <h2>${s.title}</h2>
+    <p>制限時間なし。何分食べられるか挑戦!<br>
+    パパとママに見つからないように、ケーキをこっそり食べよう!<br>
+    ぜんぶ(${s.cake.maxBites}口)食べきれるか挑戦!</p>
+    <button class="btn" id="goBtn">じゅんび OK!</button>
+  `);
+  document.getElementById('goBtn').addEventListener('click', ()=>{ hideOverlay(); state='playing'; });
+}
+let caughtAnimTime = 0;
+let caughtAnimActive = false;
+let caughtDadBaseX = 0, caughtDadBaseY = 0, caughtDadBaseZ = 0, caughtDadBaseRot = 0;
+function startCaughtAnimation(){
+  caughtAnimTime = 0;
+  caughtAnimActive = true;
+  caughtDadBaseX = dad.x;
+  caughtDadBaseY = bob(dad._bobPhase||0);
+  caughtDadBaseZ = dad.z;
+  caughtDadBaseRot = dad.facingAngle;
+  const parts = dadGroup.userData.catchParts;
+  if(parts){
+    parts.armL.rotation.z = -0.3;
+    parts.armR.rotation.z = 0.3;
+  }
+}
+function updateCaughtAnimation(dt){
+  if(!caughtAnimActive || !dadGroup.visible) return;
+  caughtAnimTime += dt;
+  const t = caughtAnimTime;
+  const parts = dadGroup.userData.catchParts;
+  // ぐっと身を乗り出して両腕で「つかまえた！」ポーズ
+  const reach = Math.min(1, t/0.22);
+  const hold = Math.min(1, Math.max(0,(t-0.22)/0.38));
+  const back = Math.min(1, Math.max(0,(t-0.60)/0.28));
+  const ease = x => x*x*(3-2*x);
+  const r = ease(reach), h = ease(hold), b = ease(back);
+  const forward = Math.sin(caughtDadBaseRot);
+  const forwardZ = Math.cos(caughtDadBaseRot);
+  const lunge = 30*r - 30*b;
+  dadGroup.position.set(caughtDadBaseX + forward*lunge, caughtDadBaseY + 5*Math.sin(Math.min(t,0.6)*Math.PI), caughtDadBaseZ + forwardZ*lunge);
+  dadGroup.rotation.y = caughtDadBaseRot;
+  dadGroup.rotation.x = -0.12*r + 0.12*b;
+  if(parts){
+    parts.armL.rotation.z = -0.3 - 0.9*r + 0.15*b;
+    parts.armR.rotation.z = 0.3 + 0.9*r - 0.15*b;
+    parts.armL.rotation.x = -0.65*r + 0.1*b;
+    parts.armR.rotation.x = -0.65*r + 0.1*b;
+    parts.handL.position.z = 6 + 12*r;
+    parts.handR.position.z = 6 + 12*r;
+    parts.head.rotation.x = -0.08*h + 0.04*b;
+  }
+  if(t > 0.95){
+    caughtAnimActive = false;
+    dadGroup.position.set(dad.x,bob(dad._bobPhase||0),dad.z);
+    dadGroup.rotation.set(0,dad.facingAngle,0);
+    if(parts){
+      parts.armL.rotation.set(0,-0,-0.3);
+      parts.armR.rotation.set(0,0,0.3);
+      parts.armL.position.set(32,42,0);
+      parts.armR.position.set(-32,42,0);
+      parts.handL.position.set(40,24,3);
+      parts.handR.position.set(-40,24,3);
+      parts.head.rotation.set(0,0,0);
+    }
+  }
+}
+function goCaught(){
+  if(state === 'caught' || state === 'gameover') return;
+  state = 'caught';
+  startCaughtAnimation();
+  lives = 0;
+  sfxCatch();
+  flashAlpha = 1;
+  updateLivesUI();
+  // 1回でも捕まったらゲームオーバー
+  setTimeout(()=>{ goGameOver(); }, 900);
+}
+function goTimeUp(){
+  state = 'timeup';
+  showOverlay(`
+    <div class="bigEmoji">⏰</div>
+    <h2>タイムアップ!</h2>
+    <p>パパがねしつに向かっちゃった…<br>
+    食べたケーキ: 🍰 ${cakeBites}/${stage.cake.maxBites} 口<br>スコア: ${score}点</p>
+    <button class="btn" id="retryBtn">もういちど</button>
+  `);
+  document.getElementById('retryBtn').addEventListener('click', ()=>{ resetRunToMenu(); hideOverlay(); goIntro(); });
+}
+function goStageClear(){
+  state = 'stageclear';
+  sfxClear();
+  const timeBonus = Math.floor(timeLeft) * 5;
+  score += timeBonus + 100;
+  showOverlay(`
+    <div class="bigEmoji">🎉</div>
+    <h2>ステージクリア!</h2>
+    <p>タイムボーナス: ${timeBonus}点<br>合計スコア: ${score}点</p>
+    <button class="btn" id="nextBtn">けっか発表</button>
+  `);
+  document.getElementById('nextBtn').addEventListener('click', ()=>{ goWin(); });
+}
+function goGameOver(){
+  state = 'gameover';
+  showOverlay(`
+    <div class="bigEmoji">😵</div>
+    <h2>ゲームオーバー</h2>
+    <p>パパにバレすぎちゃった…<br>
+    食べたケーキ: 🍰 ${cakeBites}/${stage.cake.maxBites} 口<br>スコア: ${score}点</p>
+    <button class="btn" id="restartBtn">さいしょから</button>
+  `);
+  document.getElementById('restartBtn').addEventListener('click', ()=>{ resetRunToMenu(); hideOverlay(); goIntro(); });
+}
+function goWin(){
+  state = 'win';
+  const timeBonus = Math.floor(timeLeft) * 5;
+  score += timeBonus + 200;
+  sfxClear();
+  showOverlay(`
+    <div class="bigEmoji">🏆</div>
+    <h2>ケーキ完食!</h2>
+    <p>パパに気づかれず、ケーキを ${stage.cake.maxBites}口 ぜんぶこっそり完食!<br>最終スコア: ${score}点</p>
+    <button class="btn" id="playAgainBtn">もういちど遊ぶ</button>
+  `);
+  document.getElementById('playAgainBtn').addEventListener('click', ()=>{ resetRunToMenu(); hideOverlay(); goIntro(); });
+}
+
+// ================= Mom =================
+function updateMom(dt){
+  if(!momGroup) return;
+  if(cakeDeliveryTimer > 0){
+    momGroup.visible = true;
+    const t = 1 - Math.min(1, cakeDeliveryTimer / 1.4);
+    const startX = stage.cake.x + 150, startZ = stage.cake.z - 150;
+    const endX = stage.cake.x + 72, endZ = stage.cake.z - 72;
+    momGroup.position.set(lerp(startX,endX,t), bob(t*2), lerp(startZ,endZ,t));
+    momGroup.rotation.y = Math.atan2(stage.cake.x-momGroup.position.x, stage.cake.z-momGroup.position.z);
+  } else if(momAlertTimer > 0){
+    momAlertTimer = Math.max(0, momAlertTimer - dt);
+    momGroup.visible = true;
+    const sees = updateMomDetection();
+    if(sees){
+      momAlerted = true;
+      // ママもパパと同じく、見つけたらこちらへ向かってくる。
+      const dx = player.x - momGroup.position.x, dz = player.z - momGroup.position.z;
+      const d = Math.hypot(dx,dz);
+      if(d > 18){
+        const step = Math.min(145*dt, d);
+        momGroup.position.x += dx/d*step;
+        momGroup.position.z += dz/d*step;
+      }
+      momGroup.rotation.y = Math.atan2(dx,dz);
+    } else if(momAlerted){
+      // 見失ったら、その場で少し見回す。
+      momGroup.rotation.y += Math.sin(performance.now()/180)*dt*1.2;
+    }
+  } else {
+    momAlerted = false;
+    momGroup.visible = false;
+  }
+  momLabelSprite.visible = momGroup.visible;
+  if(momGroup.visible) momLabelSprite.position.set(momGroup.position.x,155+Math.sin(performance.now()/220)*2,momGroup.position.z);
+}
+
+// ================= Dad AI =================
+function updateDad(dt){
+  // パパは通常は巡回し、プレイヤーに気づくと視界内にいる間だけ追跡する。
+  // 視界に入っただけではアウトにせず、実際に近距離まで追いついた時だけ捕まえる。
+  const seen = dadCanSeePlayer();
+  const catchDistance = 62; // 通常時の捕獲範囲
+  const tableCatchDistance = 90; // 机上でも捕まるが、広すぎないように調整
+  const playerElevated = (player.groundY||0) >= 1 && (player.groundY||0) < 145;
+
+  // 机の上では家具が視線を遮っても、パパが十分近づいたら捕まる。
+  // 「見えているか」ではなく、実際に手が届く距離を優先する。
+  if(!player.hidden && playerElevated && !playerOnFridge()){
+    const edx = player.x-dad.x, edz = player.z-dad.z;
+    if(Math.hypot(edx,edz) <= tableCatchDistance){
+      goCaught();
+      return;
+    }
+  }
+
+  if(seen){
+    const wasAlerted = dad.alerted;
+    dad.alerted = true;
+    dad.mode = 'chase';
+    if(!wasAlerted && state==='playing') sfxSprint();
+    dad.chaseRepathTimer -= dt;
+    const dx = player.x-dad.x, dz = player.z-dad.z;
+    const d = Math.hypot(dx,dz);
+
+    // 実際に接触する距離まで近づいた時だけアウト。
+    if(d <= catchDistance && !player.hidden && !playerOnFridge()){
+      goCaught();
+      return;
+    }
+
+    // プレイヤーの現在位置へ短い経路を作り直して追跡する。
+    if(dad.chaseRepathTimer <= 0 || !dad.navPath || !dad.navPath.length){
+      const nav = dadNavPathTo(player.x, player.z);
+      if(nav.length){
+        dad.navPath = nav;
+        dad.navIndex = nav.length > 1 ? 1 : 0;
+      }
+      dad.chaseRepathTimer = 0.18;
+    }
+  } else if(dad.mode === 'chase'){
+    // 見失ったら少しだけ現在の方向を向いてから通常巡回へ戻る。
+    dad.alerted = false;
+    dad.mode = 'look';
+    dad.lookTimer = 0.35;
+    dad.lookBase = dad.facingAngle;
+    dad.sweep = 0;
+    dad.chaseRepathTimer = 0;
+  }
+
+  if(!dad.navPath || !dad.navPath.length) dadSetNextRoute();
+
+  dad.tempoTimer -= dt;
+  if(dad.tempoTimer <= 0){
+    const r=Math.random();
+    dad.tempoMode=r<0.38?'slow':r<0.72?'normal':'sprint';
+    dad.tempoTimer=dad.tempoMode==='sprint'?(0.7+Math.random()*0.7):(1.4+Math.random()*2.6);
+    if(dad.tempoMode==='sprint' && state==='playing') sfxSprint();
+  }
+
+  // 追跡中は巡回の一時停止・ランダム旋回をしない。
+  if(dad.mode==='move' && Math.random()<0.005){
+    dad.mode='look'; dad.lookTimer=0.25+Math.random()*0.45; dad.lookBase=dad.facingAngle; dad.sweep=0;
+  }
+  const tempoMult=dad.tempoMode==='slow'?0.5:dad.tempoMode==='sprint'?2.15:1;
+  // 発見したら通常巡回より大幅に速く走って追いかける。
+  const chaseMult = dad.mode==='chase' ? 2.0 : 1;
+  const speed=stage.dad.speed*tempoMult*chaseMult;
+
+  if(dad.mode==='move' || dad.mode==='chase'){
+    let target=dad.navPath[dad.navIndex];
+    if(!target){
+      if(dad.mode==='chase'){
+        const nav=dadNavPathTo(player.x,player.z);
+        if(nav.length){ dad.navPath=nav; dad.navIndex=nav.length>1?1:0; target=dad.navPath[dad.navIndex]; }
+      } else {
+        dadSetNextRoute(); target=dad.navPath[dad.navIndex];
+      }
+    }
+    if(target){
+      const dx=target.x-dad.x,dz=target.z-dad.z,d=Math.hypot(dx,dz);
+      if(d<8){
+        dad.x=target.x; dad.z=target.z;
+        dad.navIndex++;
+        if(dad.navIndex>=dad.navPath.length){
+          if(dad.mode==='chase'){
+            dad.chaseRepathTimer=0;
+          } else {
+            const pauseBase=stage.dad.lookPause*(dad.tempoMode==='sprint'?0.4:dad.tempoMode==='slow'?1.7:1);
+            dad.mode='look'; dad.lookTimer=pauseBase; dad.lookBase=dad.facingAngle; dad.sweep=0;
+            dad.wp=(dad.wp+1)%stage.dad.path.length;
+            dadSetNextRoute();
+          }
+        }
+      }else{
+        const desired=Math.atan2(dx,dz), step=Math.min(speed*dt,d);
+        const nx=dad.x+Math.sin(desired)*step, nz=dad.z+Math.cos(desired)*step;
+        const roombaHit=roombaGroup && Math.hypot(nx-roomba.x,nz-roomba.z)<roomba.radius+20;
+        if(!dadNavBlocked(nx,nz) && !roombaHit){
+          dad.x=nx; dad.z=nz; dad.stuckTimer=0;
+        }else if(!roombaHit){
+          const near=dadNavNearest(dad.x,dad.z);
+          if(near){ dad.x=near.x; dad.z=near.z; }
+          dad.stuckTimer=0;
+        }else{
+          dad.stuckTimer+=dt;
+          if(dad.stuckTimer>0.35){
+            if(dad.mode==='chase'){ dad.chaseRepathTimer=0; } else dadSetNextRoute();
+            dad.stuckTimer=0;
+          }
+        }
+        dad.facingAngle=desired;
+      }
+    }
+  }else{
+    dad.lookTimer-=dt;
+    dad.sweep+=dt*(dad.tempoMode==='sprint'?5.4:dad.tempoMode==='slow'?1.9:3.2);
+    dad.facingAngle=dad.lookBase+Math.sin(dad.sweep)*0.65;
+    if(dad.lookTimer<=0){ dad.mode='move'; dad.alerted=false; dadSetNextRoute(); }
+  }
+
+  dadGroup.position.set(dad.x,bob(dad._bobPhase||0),dad.z);
+  dadGroup.rotation.y=dad.facingAngle;
+  dadBlob.position.set(dad.x,0.5,dad.z);
+  if(dad.mode==='move' || dad.mode==='chase') dad._bobPhase=(dad._bobPhase||0)+dt*(dad.mode==='chase'?15:9)*tempoMult; else dad._bobPhase=0;
+
+  dadDangerGroup.position.set(dad.x,0,dad.z);
+  dadDangerFill.material.opacity=seen ? 0.78 : 0.55;
+  dadDangerFill.rotation.y=dad.facingAngle;
+  dadLightPivot.position.set(dad.x,1.2,dad.z);
+  dadLightPivot.rotation.y=dad.facingAngle;
+
+  if(dadVisionFan) dadVisionFan.visible=false;
+  momLabelSprite.visible=momGroup.visible;
+  if(momGroup.visible) momLabelSprite.position.set(momGroup.position.x,155+Math.sin(performance.now()/220)*2,momGroup.position.z);
+  dadIndicatorSprite.visible = seen || dad.alerted;
+  if(dadIndicatorSprite.visible) dadIndicatorSprite.position.set(dad.x,142+Math.sin(performance.now()/150)*4,dad.z);
+}
+function playerOnFridge(){ return !player.hidden && (player.groundY||0) >= 145; }
+function actorEyeHeight(actor, isPlayer=false){
+  if(isPlayer){
+    const crouched = !!player.crouching || !!player.sliding;
+    return (player.groundY||0) + (crouched ? 58 : 108) + (player.jumpArc||0);
+  }
+  return (actor.groundY||0) + 112;
+}
+function visionBlockedByFurniture(fromX, fromZ, fromY, toX, toZ, toY){
+  const dx=toX-fromX, dz=toZ-fromZ;
+  const len2=dx*dx+dz*dz;
+  if(len2 < 0.0001) return false;
+  for(const o of obstacles){
+    // Ignore non-solid visual rugs/carpets.
+    if(o.editorType==='carpet') continue;
+    const minX=o.minX-2, maxX=o.maxX+2, minZ=o.minZ-2, maxZ=o.maxZ+2;
+    // 2D slab intersection with the furniture footprint.
+    let t0=0, t1=1;
+    const clip=(p,q)=>{
+      if(Math.abs(p)<1e-8) return q>=0;
+      const r=q/p;
+      if(p<0){ if(r>t1) return false; if(r>t0) t0=r; }
+      else { if(r<t0) return false; if(r<t1) t1=r; }
+      return true;
+    };
+    if(!clip(-dx, fromX-minX) || !clip(dx, maxX-fromX) || !clip(-dz, fromZ-minZ) || !clip(dz, maxZ-fromZ)) continue;
+    const a=Math.max(0,t0), b=Math.min(1,t1);
+    if(b<a) continue;
+    const yA=fromY+(toY-fromY)*a, yB=fromY+(toY-fromY)*b;
+    const obstacleBottom=0, obstacleTop=o.topY||0;
+    const rayMin=Math.min(yA,yB), rayMax=Math.max(yA,yB);
+    if(rayMax >= obstacleBottom-1 && rayMin <= obstacleTop+1){
+      // If the player is physically inside/under a piece of furniture, the
+      // furniture still blocks a ray coming from the other side.
+      return true;
+    }
+  }
+  return false;
+}
+function dadCanSeePlayer(){
+  if(player.hidden || playerOnFridge()) return false;
+  const dx = player.x-dad.x, dz = player.z-dad.z;
+  const d = Math.hypot(dx,dz);
+  if(d > stage.dad.visionRange) return false;
+
+  // パパの正面方向から左右 visionAngle/2 の範囲だけを「見えている」とする。
+  // 背中側（視野角の外側）にいるプレイヤーは距離が近くても検知しない。
+  const nx = dx / Math.max(d, 0.0001);
+  const nz = dz / Math.max(d, 0.0001);
+  const fx = Math.sin(dad.facingAngle);
+  const fz = Math.cos(dad.facingAngle);
+  const dot = THREE.MathUtils.clamp(fx*nx + fz*nz, -1, 1);
+  const angle = Math.acos(dot);
+  if(angle > stage.dad.visionAngle / 2) return false;
+
+  // 視野角内でも、家具で3Dの視線が遮られていれば見えない。
+  const dadY=actorEyeHeight(dad,false);
+  const playerY=actorEyeHeight(player,true);
+  return !visionBlockedByFurniture(dad.x,dad.z,dadY,player.x,player.z,playerY);
+}
+
+// ================= Player update =================
+function updatePlayer(dt){
+  if(cakeDeliveryTimer > 0){
+    cakeDeliveryTimer -= dt;
+    if(cakeDeliveryTimer <= 0){ updateCakeVisual(); }
+  }
+  if(player.doingMischief){
+    player.mischiefProgress += dt;
+    if(player.mischiefProgress >= stage.cake.biteDuration){
+      cakeBites = Math.min(stage.cake.maxBites, cakeBites + 1);
+      player.doingMischief = false;
+      score += 45;
+      cakeCombo += 1;
+      spawnCakeScoreFX(45, cakeCombo, false);
+      sfxCakeBurst();
+      if(cakeBites >= stage.cake.maxBites){
+        cakesEaten += 1;
+        score += 120;
+        spawnCakeScoreFX(120, cakeCombo, true);
+        cakeCombo = 0;
+        cakeBites = 0;
+        cakeDeliveryTimer = 1.4;
+        updateCakeVisual();
+        renderMissionList();
+        showCakeDeliveryNotice();
+      } else {
+        updateCakeVisual();
+        renderMissionList();
+      }
+    }
+  } else if(player.vaulting){
+    player.vaultTime += dt;
+    const t = Math.min(1, player.vaultTime / VAULT_DURATION);
+    player.x = lerp(player.vaultFrom.x, player.vaultTo.x, t);
+    player.z = lerp(player.vaultFrom.z, player.vaultTo.z, t);
+    player.jumpArc = Math.sin(t*Math.PI) * VAULT_HEIGHT;
+    if(t >= 1){ player.vaulting = false; player.jumpArc = 0; sfxLand(); addShake(0.55); }
+  } else if(player.sliding){
+    player.slideTime += dt;
+    const t = player.slideTime / SLIDE_DURATION;
+    const speed = SLIDE_SPEED * (1 - t*0.35);
+    moveWithCollision(player.slideDir.x*speed*dt, player.slideDir.z*speed*dt);
+    player.x = clamp(player.x, stage.bounds.minX+18, stage.bounds.maxX-18);
+    player.z = clamp(player.z, stage.bounds.minZ+18, stage.bounds.maxZ-18);
+    if(player.slideTime >= SLIDE_DURATION){ player.sliding = false; }
+  } else if(player.hidden){
+    const spot = stage.hidingSpots[player.hideSpotIdx];
+    if(spot && spot.type === 'curtain'){
+      let mx = move.x;
+      const kb = keyboardVector();
+      if(kb.x) mx = kb.x;
+      if(mx){
+        const creepSpeed = 95;
+        player.x += mx * creepSpeed * dt;
+        const halfW = (spot.width || 480) / 2;
+        player.x = clamp(player.x, spot.x - halfW, spot.x + halfW);
+      }
+      player.z = spot.z;
+    }
+  } else {
+    let mx = move.x, my = move.y;
+    const kb = keyboardVector();
+    if(kb.x || kb.y){ mx = kb.x; my = kb.y; }
+    if(mx || my){
+      const forward = {x: Math.sin(camYawSmooth), y:0, z: Math.cos(camYawSmooth)};
+      const right = {x: -Math.cos(camYawSmooth), y:0, z: Math.sin(camYawSmooth)};
+      // Stick up = forward, stick right = strafe right.
+      let dirX = right.x*mx + forward.x*(-my);
+      let dirZ = right.z*mx + forward.z*(-my);
+      const len = Math.hypot(dirX,dirZ);
+      if(len > 0.001){
+        dirX/=len; dirZ/=len;
+        const speed = player.crouching ? 125 : 225;
+        moveWithCollision(dirX*speed*dt, dirZ*speed*dt);
+        player.yaw = Math.atan2(dirX, dirZ);
+      }
+    }
+    player.x = clamp(player.x, stage.bounds.minX+18, stage.bounds.maxX-18);
+    player.z = clamp(player.z, stage.bounds.minZ+18, stage.bounds.maxZ-18);
+  }
+
+  if(player.jumping){
+    player.jumpTime += dt;
+    const t = player.jumpTime / JUMP_DURATION;
+    player.jumpArc = Math.sin(Math.min(t,1)*Math.PI) * JUMP_HEIGHT;
+    if(t >= 1){
+      const landingTop = getSupportTopAt(player.x, player.z);
+      player.groundY = landingTop;
+      player.jumping = false;
+      player.jumpArc = 0;
+      sfxLand(); addShake(0.4);
+    }
+  }
+
+  playerGroup.visible = !player.hidden;
+  const baseY = (player._bobPhase!==undefined ? bob(player._bobPhase) : 0);
+  playerGroup.position.set(player.x, baseY + player.groundY + (player.jumpArc||0), player.z);
+  let spinY = 0, flipX = 0, tiltZ = 0;
+  if(player.jumping){ spinY = Math.min(1, player.jumpTime/JUMP_DURATION) * Math.PI*2; }
+  if(player.vaulting){ flipX = -Math.min(1, player.vaultTime/VAULT_DURATION) * Math.PI*2; }
+  if(player.sliding){ tiltZ = Math.sin(Math.min(1, player.slideTime/SLIDE_DURATION)*Math.PI) * 0.32; }
+  let eatBob=0, eatTilt=0;
+  const eatParts = playerGroup.userData.eatParts;
+  if(player.doingMischief && eatParts){
+    const et = Math.min(1, player.mischiefProgress/Math.max(0.01,stage.cake.biteDuration));
+    // 食べる方向をケーキへ向け、手→口→かじる、の順に動かす。
+    const cakeDX = stage.cake.x - player.x, cakeDZ = stage.cake.z - player.z;
+    if(Math.hypot(cakeDX,cakeDZ) > 0.01) player.yaw = Math.atan2(cakeDX, cakeDZ);
+    const reach = et < 0.34 ? et/0.34 : (et < 0.62 ? 1 : 1-(et-0.62)/0.38);
+    const lift = Math.sin(Math.min(1, reach)*Math.PI*0.5);
+    const handY = 25 + lift*28;
+    const handZ = 7 + lift*17;
+    eatParts.handL.position.set(16 - lift*3, handY, handZ);
+    eatParts.handR.position.set(-16 + lift*3, handY, handZ);
+    eatParts.armL.rotation.z = -0.4 - lift*0.65;
+    eatParts.armR.rotation.z = 0.4 + lift*0.65;
+    eatParts.fingerL1.position.set(16 - lift*3, handY-3, handZ+5);
+    eatParts.fingerL2.position.set(19 - lift*3, handY-3, handZ+4.5);
+    eatParts.fingerR1.position.set(-16 + lift*3, handY-3, handZ+5);
+    eatParts.fingerR2.position.set(-19 + lift*3, handY-3, handZ+4.5);
+    // 一口ごとに少し顔を前へ倒し、口を開けるように見せる。
+    const bite = et > 0.58 ? Math.sin((et-0.58)/0.42*Math.PI) : 0;
+    eatTilt = -0.08*lift - 0.16*bite;
+    eatBob = Math.sin(et*Math.PI*2)*1.8;
+    eatParts.head.rotation.x = -0.12*lift - 0.06*bite;
+    eatParts.mouth.scale.set(1 + 0.35*bite, 1 + 0.55*bite, 1);
+  } else if(eatParts){
+    eatParts.handL.position.set(32,25,6); eatParts.handR.position.set(-32,25,6);
+    eatParts.armL.rotation.z = -0.4; eatParts.armR.rotation.z = 0.4;
+    eatParts.fingerL1.position.set(32,22,11); eatParts.fingerL2.position.set(35,22,10.5);
+    eatParts.fingerR1.position.set(-32,22,11); eatParts.fingerR2.position.set(-35,22,10.5);
+    eatParts.head.rotation.x = 0; eatParts.mouth.scale.set(1,1,1);
+  }
+  playerGroup.position.y += eatBob;
+  playerGroup.rotation.set(flipX, player.yaw + spinY, tiltZ + eatTilt);
+  playerGroup.scale.set(1, player.sliding?0.55:(player.crouching?0.68:1), player.sliding?1.35:(player.crouching?1.12:1));
+  if(!player.hidden && !player.doingMischief && !player.sliding && !player.vaulting && (move.x||move.y||keyboardVector().x||keyboardVector().y)){
+    player._bobPhase = (player._bobPhase||0) + dt*13;
+  } else { player._bobPhase = 0; }
+  playerBlob.visible = !player.hidden;
+  playerBlob.position.set(player.x, 0.5 + player.groundY, player.z);
+
+  fillLight.position.set(player.x, 130, player.z + 40);
+
+  if(player.hidden){
+    const s = stage.hidingSpots[player.hideSpotIdx];
+    peekSprite.visible = true;
+    peekSprite.position.set(player.x + 14, 78, player.z + 18);
+  } else {
+    peekSprite.visible = false;
+  }
+}
+
+// ================= Camera (Animal-Crossing-style auto follow) =================
+function updateCamera(dt){
+  // Camera angle stays fixed per stage (set once in setupStage) — only position tracks the player,
+  // so the view never spins around as you change direction, like classic Animal Crossing's fixed room camera.
+  const distance = 470, height = 440, lookHeight = 25;
+  const desiredX = player.x - Math.sin(camYawSmooth)*distance;
+  const desiredZ = player.z - Math.cos(camYawSmooth)*distance;
+  const k = Math.min(1, dt*4.2);
+  camPosCurrent.x = lerp(camPosCurrent.x, desiredX, k);
+  camPosCurrent.y = lerp(camPosCurrent.y, height, k);
+  camPosCurrent.z = lerp(camPosCurrent.z, desiredZ, k);
+  camPosCurrent.x = clamp(camPosCurrent.x, stage.bounds.minX-600, stage.bounds.maxX+600);
+  camPosCurrent.z = clamp(camPosCurrent.z, stage.bounds.minZ-600, stage.bounds.maxZ+600);
+  camera.position.set(camPosCurrent.x, camPosCurrent.y, camPosCurrent.z);
+  camera.lookAt(player.x, lookHeight, player.z);
+  camShake = Math.max(0, camShake - dt*2.8);
+  if(camShake > 0.001){
+    camera.position.x += (Math.random()-0.5) * camShake * 10;
+    camera.position.y += (Math.random()-0.5) * camShake * 8;
+    camera.position.z += (Math.random()-0.5) * camShake * 10;
+  }
+}
+
+// ================= Detection =================
+function updateMomDetection(){
+  if(state!=='playing' || !momGroup || !momGroup.visible || player.hidden || playerOnFridge()) return false;
+  const dx=player.x-momGroup.position.x, dz=player.z-momGroup.position.z;
+  const d=Math.hypot(dx,dz);
+  if(d>310) return false;
+  const a=Math.atan2(dx,dz);
+  const ma=momGroup.rotation.y;
+  // パパと同じ90度の前方視野。背中側は見えない。
+  if(Math.abs(angDiff(a,ma)) >= Math.PI*0.5) return false;
+  const momY=(momGroup.position.y||0)+112;
+  const playerY=actorEyeHeight(player,true);
+  return !visionBlockedByFurniture(momGroup.position.x,momGroup.position.z,momY,player.x,player.z,playerY);
+}
+function updateDetection(dt){
+  if(state !== 'playing') return;
+  const seen = dadCanSeePlayer() || updateMomDetection();
+  if(seen){
+    // 見つかった瞬間に「！」を出す。ここではまだアウトにしない。
+    detection = Math.min(100, detection + 95*dt);
+    beepCooldown -= dt;
+    if(beepCooldown <= 0){ sfxAlertBeep(1 + detection/180); beepCooldown = 0.38; }
+  } else {
+    detection = Math.max(0, detection - 70*dt);
+    beepCooldown -= dt;
+  }
+}
+
+function updateTimer(dt){
+  if(state !== 'playing') return;
+  timeLeft += dt;
+}
+
+
+// ================= HUD / Radar =================
+function updateHUD(){
+  document.getElementById('scoreEl').textContent = score + ' POINT';
+  const bar = document.getElementById('alertBar');
+  bar.style.width = detection + '%';
+  bar.style.background = detection < 40 ? 'linear-gradient(90deg,#3ddc84,#8fe08f)'
+    : detection < 75 ? 'linear-gradient(90deg,#f4d03f,#f4a63f)'
+    : 'linear-gradient(90deg,#ff5b3f,#ff2e2e)';
+}
+const radarCanvas = document.getElementById('radarCanvasReal');
+const rctx = radarCanvas.getContext('2d');
+function drawRadar(){
+  const R = radarCanvas.width/2;
+  rctx.clearRect(0,0,radarCanvas.width,radarCanvas.height);
+  rctx.save();
+  // Clip everything drawn below to the round radar disc so the vision cone
+  // (and anything else) can never spill outside the circular frame.
+  rctx.beginPath(); rctx.arc(R,R,R-2,0,Math.PI*2); rctx.clip();
+  rctx.fillStyle = 'rgba(4,20,28,0.9)';
+  rctx.beginPath(); rctx.arc(R,R,R-2,0,Math.PI*2); rctx.fill();
+  rctx.strokeStyle = 'rgba(120,255,180,0.25)';
+  rctx.beginPath(); rctx.arc(R,R,R*0.6,0,Math.PI*2); rctx.stroke();
+
+  const b = stage.bounds;
+  const spanX = (b.maxX-b.minX), spanZ = (b.maxZ-b.minZ);
+  const scale = (R-16) / (Math.max(spanX,spanZ)/2);
+  const cx0 = (b.minX+b.maxX)/2, cz0 = (b.minZ+b.maxZ)/2;
+  function toRadar(x,z){ return { x: R + (x-cx0)*scale, y: R + (z-cz0)*scale }; }
+
+  rctx.fillStyle = '#6fa8ff';
+  stage.hidingSpots.forEach(s=>{ const p=toRadar(s.x,s.z); rctx.beginPath(); rctx.arc(p.x,p.y,3,0,Math.PI*2); rctx.fill(); });
+  {
+    const p = toRadar(stage.cake.x, stage.cake.z);
+    rctx.fillStyle = cakeBites >= stage.cake.maxBites ? 'rgba(120,255,150,0.5)' : '#ff9fc0';
+    rctx.beginPath(); rctx.arc(p.x,p.y,4,0,Math.PI*2); rctx.fill();
+  }
+  const dp = toRadar(dad.x,dad.z);
+  rctx.save();
+  rctx.translate(dp.x,dp.y);
+  rctx.rotate(dad.facingAngle);
+  const coneLen = (stage.dad.visionRange)*scale;
+  const crouched = !!player.crouching || !!player.sliding;
+  const coneA = -stage.dad.visionAngle/2 + Math.PI/2;
+  const coneB =  stage.dad.visionAngle/2 + Math.PI/2;
+  if(crouched){
+    // しゃがみ中は、遠くの「低い位置」はパパから見えにくいことを
+    // レーダー上でも分かるように、外側を薄い赤で表示する。
+    const stealthLen = coneLen * 0.62;
+    rctx.fillStyle = 'rgba(255,90,90,0.14)';
+    rctx.beginPath(); rctx.moveTo(0,0);
+    rctx.arc(0,0,coneLen,coneA,coneB); rctx.closePath(); rctx.fill();
+    rctx.fillStyle = detection>65 ? 'rgba(255,60,60,0.35)' : 'rgba(255,190,90,0.3)';
+    rctx.beginPath(); rctx.moveTo(0,0);
+    rctx.arc(0,0,stealthLen,coneA,coneB); rctx.closePath(); rctx.fill();
+  }else{
+    rctx.fillStyle = detection>65 ? 'rgba(255,60,60,0.35)' : 'rgba(255,190,90,0.3)';
+    rctx.beginPath(); rctx.moveTo(0,0);
+    rctx.arc(0,0,coneLen,coneA,coneB); rctx.closePath(); rctx.fill();
+  }
+  rctx.restore();
+  rctx.fillStyle = '#ff5252';
+  rctx.beginPath(); rctx.arc(dp.x,dp.y,4,0,Math.PI*2); rctx.fill();
+  const pp = toRadar(player.x,player.z);
+  rctx.fillStyle = player.hidden ? 'rgba(120,255,150,0.6)' : '#4be36a';
+  rctx.beginPath(); rctx.arc(pp.x,pp.y,4,0,Math.PI*2); rctx.fill();
+  rctx.restore();
+}
+
+// ================= Layout Editor V2 =================
+// V2: the living room starts empty (except the existing curtain/window).
+// Furniture is added from a palette, moved as a whole, and rotated in 15-degree steps.
+let editorMode = false;
+let editorSelected = null;
+let editorHelper = null;
+let editorDragging = false;
+let editorDragOffset = new THREE.Vector3();
+let editorSavedCamera = null;
+let editorTemplates = new Map();
+let editorPlaced = new Map();
+let editorNextId = 1;
+const editorRaycaster = new THREE.Raycaster();
+const editorPointer = new THREE.Vector2();
+const editorPlane = new THREE.Plane(new THREE.Vector3(0,1,0),0);
+const editorHit = new THREE.Vector3();
+const EDITOR_KEY = 'papa-ni-naisho-layout-v4-roomba-ride';
+
+const EDITOR_CATALOG = [
+  ['sofa','ソファ'],
+  ['sofa_table','ソファーテーブル'],
+  ['kitchen','キッチン'],
+  ['fridge','冷蔵庫'],
+  ['kitchen_shelf','壁付キッチン棚'],
+  ['carpet','カーペット'],
+  ['bookshelf','本棚'],
+  ['tv','テレビ'],
+  ['plant','植栽'],
+  ['chair','イス'],
+  ['kitchen_table','キッチンテーブル'],
+  ['study_desk','壁付書斎テーブル'],
+];
+
+const EDITOR_DEFAULT_LAYOUT = {
+  version: 2,
+  stage: 'living',
+  objects: [
+    {id:'v2:plant:3', type:'plant', label:'植栽', x:257.97, z:-235.15, rotation:0},
+    {id:'v2:tv:4', type:'tv', label:'テレビ', x:266.74, z:-8.77, rotation:90},
+    {id:'v2:carpet:5', type:'carpet', label:'カーペット', x:196.54, z:-12.28, rotation:90},
+    {id:'v2:sofa:6', type:'sofa', label:'ソファ', x:89.5, z:-1.76, rotation:-90},
+    {id:'v2:kitchen_table:7', type:'kitchen_table', label:'キッチンテーブル', x:-42.11, z:-10.53, rotation:0},
+    {id:'v2:chair:8', type:'chair', label:'イス', x:-18.11, z:44.47, rotation:180},
+    {id:'v2:chair:9', type:'chair', label:'イス', x:-66.11, z:44.47, rotation:180},
+    {id:'v2:chair:10', type:'chair', label:'イス', x:-18.11, z:-65.53, rotation:0},
+    {id:'v2:chair:11', type:'chair', label:'イス', x:-66.11, z:-65.53, rotation:0},
+    {id:'v2:sofa_table:12', type:'sofa_table', label:'ソファーテーブル', x:180.75, z:-5.27, rotation:90},
+    {id:'v2:kitchen:14', type:'kitchen', label:'キッチン', x:-145.65, z:3.51, rotation:0},
+    {id:'v2:fridge:15', type:'fridge', label:'冷蔵庫', x:-254.7, z:-144.91, rotation:90},
+    {id:'v2:kitchen_shelf:16', type:'kitchen_shelf', label:'壁付キッチン棚', x:-278, z:6.65, rotation:90}
+  ]
+};
+
+function editorWorldPos(o){ const v=new THREE.Vector3(); o.getWorldPosition(v); return v; }
+function editorWorldQuaternion(o){ const q=new THREE.Quaternion(); o.getWorldQuaternion(q); return q; }
+function editorWorldScale(o){ const v=new THREE.Vector3(); o.getWorldScale(v); return v; }
+
+function editorTemplateFromMembers(id,label,members){
+  const valid=members.filter(Boolean);
+  if(!valid.length) return null;
+  const anchor=new THREE.Vector3();
+  valid.forEach(o=>anchor.add(editorWorldPos(o)));
+  anchor.multiplyScalar(1/valid.length);
+  const root=new THREE.Group();
+  root.name='template_'+id;
+  valid.forEach(src=>{
+    const c=src.clone(true);
+    c.position.copy(editorWorldPos(src)).sub(anchor);
+    c.quaternion.copy(editorWorldQuaternion(src));
+    c.scale.copy(editorWorldScale(src));
+    c.userData.editorTemplate=true;
+    root.add(c);
+  });
+  return {id,label,root};
+}
+
+function editorMakeSofaTable(){
+  const g=new THREE.Group();
+  const wood=matFromColor(0xA9683E,.55,.05);
+  g.add(box(92,6,54,wood,0,38,0));
+  [[-38,-20],[38,-20],[-38,20],[38,20]].forEach(([x,z])=>g.add(box(5,36,5,wood,x,18,z)));
+  return g;
+}
+function editorMakeKitchenShelf(){
+  // Long wall-mounted kitchen storage with a microwave and toaster.
+  const g=new THREE.Group();
+  const wood=matFromColor(0xC79256,.5,.05);
+  const side=matFromColor(0xF0E9D8,.55);
+  const dark=matFromColor(0x2a2a2a,.25,.25);
+  const metal=matFromColor(0xB8B8B0,.4,.12);
+  g.add(box(120,110,24,side,-58,55,0));
+  g.add(box(120,110,24,side,58,55,0));
+  [12,48,84].forEach(y=>g.add(box(116,4,22,wood,0,y,0)));
+  // microwave
+  g.add(box(42,28,22,metal,-27,100,2));
+  g.add(box(34,20,2,dark,-27,101,13));
+  // toaster, clearly visible on the shelf top
+  g.add(box(32,16,20,metal,30,94,2));
+  g.add(box(24,5,2,dark,30,101,13));
+  return g;
+}
+function editorMakeCarpet(){
+  const tex=makeGinghamTexture(0xEFEAD2,0x9ED080);
+  return box(300,2,190,matFromTex(tex,.95),0,1,0,{cast:false});
+}
+function editorMakeStudyDesk(){
+  const g=new THREE.Group();
+  const wood=matFromColor(0xA9683E,.55,.08);
+  const top=matFromColor(0xD8B27A,.5,.08);
+  const metal=matFromColor(0x4B4B4B,.45,.2);
+  // Wall-mounted writing desk: shallow top with two side brackets.
+  g.add(box(150,6,42,top,0,72,0));
+  g.add(box(6,64,6,wood,-62,38,0));
+  g.add(box(6,64,6,wood,62,38,0));
+  g.add(box(58,4,4,metal,-32,38,0));
+  g.add(box(58,4,4,metal,32,38,0));
+  // small shelf above the desk
+  g.add(box(150,5,22,wood,0,112,0));
+  return g;
+}
+
+function editorMakeKitchenTable(){
+  const g=new THREE.Group();
+  const wood=matFromColor(0xA9683E,.55,.08);
+  const cloth=matFromTex(makeGinghamTexture(0xF7D98A,0xD99A3E),.7);
+  g.add(box(92,5,72,wood,0,46,0));
+  [[-38,-28],[38,-28],[-38,28],[38,28]].forEach(([x,z])=>g.add(box(7,42,7,wood,x,21,z)));
+  g.add(box(108,2,88,cloth,0,49,0));
+  // Cake sits on the kitchen table in V2.
+  const cakeVisual=new THREE.Group(); cakeVisual.userData.v2CakeVisual=true;
+  const cakePlate=new THREE.Mesh(new THREE.CylinderGeometry(18,18,2,24),matFromColor(0xffffff,.3,.1));
+  cakePlate.position.set(0,52,0); cakeVisual.add(cakePlate);
+  const frosting=matFromColor(0xffeee0,.5);
+  const sponge=matFromColor(0xf3d48a,.55);
+  const berryMat=matFromColor(0xe23a4e,.35);
+  for(let i=0;i<5;i++){
+    const slice=new THREE.Group(); slice.userData.v2CakeSliceIndex=i;
+    const a0=(i/5)*Math.PI*2+0.03, aLen=Math.PI*2/5-0.06;
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(15,16,10,10,1,a0,aLen),sponge); body.position.y=58; slice.add(body);
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(10,11,6,10,1,a0,aLen),frosting); top.position.y=66; slice.add(top);
+    const a=a0+aLen*0.55; const berry=new THREE.Mesh(new THREE.SphereGeometry(2.5,8,8),berryMat); berry.position.set(Math.cos(a)*6,71,Math.sin(a)*6); slice.add(berry);
+    cakeVisual.add(slice);
+  }
+  g.add(cakeVisual);
+  return g;
+}
+
+function editorMakeSofa(){
+  const g=new THREE.Group();
+  const fab=matFromTex(makeFabricTexture(0xD9C7A9),0.9);
+  const dark=matFromColor(0x7d6247,.65,.05);
+  g.add(box(130,34,58,fab,0,18,0));
+  g.add(box(130,58,18,fab,0,45,20));
+  g.add(box(18,48,62,fab,-56,40,-2));
+  g.add(box(18,48,62,fab,56,40,-2));
+  g.add(box(112,6,46,dark,0,4,0));
+  const cushionMat=matFromColor(0xE8D8BC,.9);
+  [[-34,0],[0,0],[34,0]].forEach(([x,z],i)=>{ const c=new THREE.Mesh(new THREE.BoxGeometry(28,7,28),cushionMat); c.position.set(x,55,z+2); c.rotation.z=(i-1)*0.05; c.castShadow=true; g.add(c); });
+  return g;
+}
+function editorMakeKitchen(){
+  // Longer freestanding island kitchen. Refrigerator and wall-mounted shelf
+  // remain separate editor units. Long axis follows Z so it fits the left side of the room.
+  const g=new THREE.Group();
+  const cabinet=matFromColor(0xEEE8D9,.55,.05);
+  const top=matFromColor(0xF1E9DA,.42,.10);
+  const dark=matFromColor(0x24272A,.22,.32);
+  const metal=matFromColor(0xA9B0B3,.3,.45);
+  const wood=matFromColor(0x9A633C,.55,.05);
+
+  // Long island: 96 wide x 220 deep.
+  g.add(box(96,38,220,cabinet,0,19,0));
+  g.add(box(102,5,226,top,0,40,0));
+
+  // One sink and exactly one faucet.
+  g.add(box(30,3,42,metal,-20,46,-58));
+  g.add(box(4,16,4,metal,-20,54,-58));
+
+  // Two-burner induction cooktop.
+  g.add(box(40,2,48,dark,18,46,35));
+  [[-11,-12],[11,-12],[-11,12],[11,12]].forEach(([x,z])=>{
+    const c=new THREE.Mesh(new THREE.CylinderGeometry(6,6,1.5,24),dark);
+    c.position.set(18+x,48,35+z); g.add(c);
+  });
+
+  // Long clean front face / kickboard.
+  g.add(box(78,4,4,wood,0,4,108));
+  return g;
+}
+
+function editorMakeFridge(){
+  const g=new THREE.Group();
+  const body=matFromColor(0xEEE9DF,.5,.08);
+  const dark=matFromColor(0xD7D0C4,.55,.05);
+  const metal=matFromColor(0xA9B0B3,.3,.45);
+  g.add(box(54,150,58,body,0,75,0));
+  g.add(box(48,70,3,dark,0,38,30));
+  g.add(box(48,3,3,dark,0,76,30));
+  // Single vertical handle pair, visually reading as one fridge.
+  g.add(box(3,52,3,metal,21,104,30));
+  g.add(box(3,52,3,metal,21,46,30));
+  return g;
+}
+function editorMakeBookshelf(){
+  const g=new THREE.Group();
+  const wood=matFromColor(0xC79256,.55,.05), side=matFromColor(0xE8D7B8,.6);
+  g.add(box(72,150,24,side,-32,75,0)); g.add(box(72,150,24,side,32,75,0));
+  [18,52,86,120].forEach(y=>g.add(box(64,5,22,wood,0,y,0)));
+  for(let r=0;r<3;r++) for(let c=0;c<3;c++) g.add(box(12,18,12,matFromColor([0x7A9A62,0xB77A4A,0x7C6A9A][(r+c)%3],.55),-20+c*20,30+r*34,0));
+  return g;
+}
+function editorMakeTV(){
+  const g=new THREE.Group();
+  const wood=matFromColor(0xC79256,.55,.05), dark=matFromColor(0x1c2932,.2,.3);
+  g.add(box(110,28,36,wood,0,14,0));
+  g.add(box(92,58,6,dark,0,58,0));
+  g.add(box(82,46,3,matFromColor(0x111820,.15,.35),0,58,-4));
+  return g;
+}
+function editorMakeChair(){
+  const g=new THREE.Group(); const wood=matFromColor(0xA9683E,.55,.08), seat=matFromColor(0x8FAE63,.62);
+  g.add(box(30,4,30,wood,0,24,0)); g.add(box(30,36,4,wood,0,42,-13)); g.add(box(26,4,26,seat,0,26.5,0));
+  [[-12,-12],[12,-12],[-12,12],[12,12]].forEach(([x,z])=>g.add(box(3,24,3,wood,x,12,z)));
+  return g;
+}
+function editorBuildTemplates(){
+  editorTemplates.clear();
+  if(stage.key!=='living') return;
+  const put=(id,label,root)=>editorTemplates.set(id,{id,label,root});
+  put('sofa','ソファ',editorMakeSofa());
+  put('sofa_table','ソファーテーブル',editorMakeSofaTable());
+  put('kitchen','キッチン',editorMakeKitchen());
+  put('fridge','冷蔵庫',editorMakeFridge());
+  put('kitchen_shelf','壁付キッチン棚',editorMakeKitchenShelf());
+  put('carpet','カーペット',editorMakeCarpet());
+  put('bookshelf','本棚',editorMakeBookshelf());
+  put('tv','テレビ',editorMakeTV());
+  put('plant','植栽',buildPottedPlant(0,0,1.15));
+  put('chair','イス',editorMakeChair());
+  put('kitchen_table','キッチンテーブル',editorMakeKitchenTable());
+  put('study_desk','壁付書斎テーブル',editorMakeStudyDesk());
+}
+
+function editorHideOriginalFurniture(){
+  if(stage.key!=='living') return;
+  // V2 is a blank-room editor: keep only the room shell and fixed curtain/window.
+  stageGroup.children.forEach(o=>{
+    if(o.userData.editorLocked) return;
+    o.visible = !!o.userData.fixedCurtain;
+  });
+}
+
+function editorClearPlaced(){
+  editorPlaced.forEach(u=>stageGroup.remove(u.root));
+  editorPlaced.clear();
+  editorSelected=null;
+  if(editorHelper){ stageGroup.remove(editorHelper); editorHelper=null; }
+}
+
+function editorCreateUnit(type,x=0,z=0,rot=0,id=null){
+  const t=editorTemplates.get(type); if(!t) return null;
+  const root=t.root.clone(true);
+  root.position.set(x,0,z);
+  root.rotation.y=rot;
+  const uid=id || `v2:${type}:${editorNextId++}`;
+  root.userData.editorUnitId=uid;
+  root.userData.editorType=type;
+  root.userData.editorLabel=t.label;
+  root.traverse(o=>{ o.userData.editorUnitId=uid; o.userData.editorType=type; o.userData.editorLabel=t.label; });
+  stageGroup.add(root);
+  const u={id:uid,type,label:t.label,root};
+  editorPlaced.set(uid,u);
+  return u;
+}
+function editorUnitIsVisible(u){ return !!u && u.root.visible!==false; }
+function editorUnitPosition(u){ return {x:u.root.position.x,z:u.root.position.z}; }
+function editorUnitFromObject(obj){
+  let o=obj;
+  while(o){
+    if(o.userData && o.userData.editorUnitId && editorPlaced.has(o.userData.editorUnitId)) return editorPlaced.get(o.userData.editorUnitId);
+    if(o===stageGroup) break;
+    o=o.parent;
+  }
+  return null;
+}
+function editorList(){
+  const list=document.getElementById('editorList'); list.innerHTML='';
+  editorPlaced.forEach(u=>{
+    const d=document.createElement('div');
+    const p=editorUnitPosition(u);
+    d.className='editorItem'+(u===editorSelected?' selected':'');
+    d.textContent=`${u.label}  X:${Math.round(p.x)} Z:${Math.round(p.z)} 向き:${Math.round(THREE.MathUtils.radToDeg(u.root.rotation.y))}°`;
+    d.onclick=()=>editorSelect(u);
+    list.appendChild(d);
+  });
+}
+function editorSelect(u){
+  if(!u) return;
+  if(editorHelper){ stageGroup.remove(editorHelper); editorHelper=null; }
+  editorSelected=u;
+  const box=new THREE.Box3().setFromObject(u.root);
+  editorHelper=new THREE.Box3Helper(box,0xffc85c); editorHelper.material.depthTest=false; editorHelper.renderOrder=999;
+  stageGroup.add(editorHelper);
+  const p=editorUnitPosition(u);
+  document.getElementById('editorInfo').textContent=`選択中: ${u.label} / X ${Math.round(p.x)} / Z ${Math.round(p.z)} / 向き ${Math.round(THREE.MathUtils.radToDeg(u.root.rotation.y))}°`;
+  editorList();
+}
+function editorWorldPoint(e){
+  const r=canvas.getBoundingClientRect();
+  editorPointer.x=((e.clientX-r.left)/r.width)*2-1;
+  editorPointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  editorRaycaster.setFromCamera(editorPointer,camera);
+  return editorRaycaster.ray.intersectPlane(editorPlane,editorHit) ? editorHit.clone() : null;
+}
+function editorRotate(deg){
+  if(!editorSelected) return;
+  editorSelected.root.rotation.y += THREE.MathUtils.degToRad(deg);
+  editorSelect(editorSelected);
+}
+function editorDeleteSelected(){
+  if(!editorSelected) return;
+  const name=editorSelected.label;
+  stageGroup.remove(editorSelected.root);
+  editorPlaced.delete(editorSelected.id);
+  editorSelected=null;
+  if(editorHelper){stageGroup.remove(editorHelper);editorHelper=null;}
+  editorList();
+  document.getElementById('editorInfo').textContent=`${name}を削除しました。`;
+}
+function editorSave(){
+  const data={version:2,stage:stage.key,objects:[]};
+  editorPlaced.forEach(u=>data.objects.push({id:u.id,type:u.type,label:u.label,x:Math.round(u.root.position.x*100)/100,z:Math.round(u.root.position.z*100)/100,rotation:Math.round(THREE.MathUtils.radToDeg(u.root.rotation.y)*10)/10}));
+  localStorage.setItem(EDITOR_KEY,JSON.stringify(data));
+  document.getElementById('editorInfo').textContent='配置を保存しました。';
+}
+function editorCollectData(){
+  const data={version:2,stage:stage.key,objects:[]};
+  editorPlaced.forEach(u=>data.objects.push({id:u.id,type:u.type,label:u.label,x:Math.round(u.root.position.x*100)/100,z:Math.round(u.root.position.z*100)/100,rotation:Math.round(THREE.MathUtils.radToDeg(u.root.rotation.y)*10)/10}));
+  return data;
+}
+function editorExportText(){
+  const text=JSON.stringify(editorCollectData(),null,2);
+  const ta=document.getElementById('editorText'); ta.value=text; ta.classList.add('show'); ta.focus(); ta.select();
+  document.getElementById('editorInfo').textContent='配置データを作りました。このままチャットに貼り付けてください。';
+}
+async function editorCopyText(){
+  const ta=document.getElementById('editorText'); if(!ta.value) editorExportText();
+  try{ await navigator.clipboard.writeText(ta.value); document.getElementById('editorInfo').textContent='配置データをコピーしました。'; }
+  catch(e){ ta.focus(); ta.select(); document.getElementById('editorInfo').textContent='選択したテキストをコピーしてください。'; }
+}
+function editorLoadSaved(){
+  editorClearPlaced();
+  let data=null;
+  try{ data=JSON.parse(localStorage.getItem(EDITOR_KEY)||'null'); }catch(e){ data=null; }
+  if(!data || data.stage!==stage.key || !Array.isArray(data.objects)) data=EDITOR_DEFAULT_LAYOUT;
+  data.objects.forEach(o=>{
+    if(!editorTemplates.has(o.type)) return;
+    const u=editorCreateUnit(o.type,Number(o.x)||0,Number(o.z)||0,THREE.MathUtils.degToRad(Number(o.rotation)||0),o.id);
+    if(u){ const m=String(u.id).match(/:(\d+)$/); if(m) editorNextId=Math.max(editorNextId,Number(m[1])+1); }
+  });
+}
+function editorInitV2(){
+  if(stage.key!=='living') return;
+  editorClearPlaced();
+  editorBuildTemplates();
+  editorHideOriginalFurniture();
+  editorLoadSaved();
+  editorApplyObstacles();
+  updateCakeVisual();
+}
+function editorReset(){
+  localStorage.removeItem(EDITOR_KEY);
+  editorClearPlaced();
+  editorBuildTemplates();
+  editorLoadSaved();
+  editorApplyObstacles();
+  updateCakeVisual();
+  editorList();
+  document.getElementById('editorInfo').textContent='初期配置に戻しました。';
+}
+function enterEditor(){
+  if(editorMode) return;
+  editorMode=true; state='editor';
+  editorSavedCamera={pos:camera.position.clone(),quaternion:camera.quaternion.clone(),fov:camera.fov};
+  editorClearPlaced();
+  editorBuildTemplates();
+  editorHideOriginalFurniture();
+  editorLoadSaved();
+  camera.fov=48;
+  const aspect=Math.max(0.25,innerWidth/Math.max(1,innerHeight));
+  const vfov=camera.fov*Math.PI/180;
+  const hfov=2*Math.atan(Math.tan(vfov/2)*aspect);
+  const halfW=(stage.bounds.maxX-stage.bounds.minX)/2, halfD=(stage.bounds.maxZ-stage.bounds.minZ)/2;
+  const editorCamY=Math.max(halfW/Math.tan(hfov/2),halfD/Math.tan(vfov/2))*1.18;
+  camera.position.set(0,editorCamY,0.01); camera.lookAt(0,0,0); camera.updateProjectionMatrix();
+  document.getElementById('editorPanel').classList.add('open');
+  document.getElementById('editorPanel').classList.remove('minimized');
+  document.getElementById('editorMinimize').textContent='−';
+  document.getElementById('hud').style.display='none'; document.getElementById('controls').style.display='none';
+  document.getElementById('alertWrap').style.display='none'; document.getElementById('missionList').style.display='none'; document.getElementById('radarWrap').style.display='none';
+  document.getElementById('vignette').style.display='none'; document.getElementById('bloomCanvas').style.display='none';
+  document.getElementById('editorBtn').textContent='編集モード中';
+  editorList();
+}
+function editorApplyObstacles(){
+  if(stage.key!=='living') return;
+  // V2 furniture creates its own bounds; the Roomba is handled dynamically.
+  obstacles = [];
+  editorPlaced.forEach(u=>{
+    if(['carpet'].includes(u.type)) return;
+    const box3=new THREE.Box3().setFromObject(u.root);
+    if(!isFinite(box3.min.x)||!isFinite(box3.max.x)) return;
+    obstacles.push({minX:box3.min.x,maxX:box3.max.x,minZ:box3.min.z,maxZ:box3.max.z,allowSlide:true,allowCrouch:u.type==='kitchen_table',topY:Math.max(0,box3.max.y),editorType:u.type});
+  });
+  if(roombaGroup){
+    obstacles.push({minX:roomba.x-roomba.radius,maxX:roomba.x+roomba.radius,minZ:roomba.z-roomba.radius,maxZ:roomba.z+roomba.radius,allowSlide:false,topY:roomba.topY,roomba:true});
+  }
+}
+function exitEditor(){
+  editorApplyObstacles();
+  editorMode=false; state='menu';
+  if(editorHelper){stageGroup.remove(editorHelper);editorHelper=null;}
+  editorSelected=null;
+  if(editorSavedCamera){camera.position.copy(editorSavedCamera.pos);camera.quaternion.copy(editorSavedCamera.quaternion);camera.fov=editorSavedCamera.fov;camera.updateProjectionMatrix();}
+  document.getElementById('editorPanel').classList.remove('open');
+  document.getElementById('hud').style.display='flex'; document.getElementById('controls').style.display='flex';
+  document.getElementById('alertWrap').style.display='block'; document.getElementById('missionList').style.display='flex'; document.getElementById('radarWrap').style.display='block';
+  document.getElementById('vignette').style.display='block'; document.getElementById('bloomCanvas').style.display='block';
+  document.getElementById('editorBtn').textContent='配置編集';
+}
+function editorPointerDown(e){
+  if(!editorMode) return;
+  const p=editorWorldPoint(e); if(!p) return;
+  const r=canvas.getBoundingClientRect();
+  editorPointer.x=((e.clientX-r.left)/r.width)*2-1; editorPointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  editorRaycaster.setFromCamera(editorPointer,camera);
+  const targets=[]; editorPlaced.forEach(u=>{if(editorUnitIsVisible(u)) targets.push(u.root);});
+  const hits=editorRaycaster.intersectObjects(targets,true);
+  if(!hits.length){editorSelected=null;if(editorHelper){stageGroup.remove(editorHelper);editorHelper=null;}editorList();return;}
+  const u=editorUnitFromObject(hits[0].object); if(!u) return;
+  editorSelect(u);
+  const wp=editorWorldPoint(e); if(wp){const pos=editorUnitPosition(u);editorDragOffset.set(pos.x-wp.x,0,pos.z-wp.z);}
+  editorDragging=true; canvas.setPointerCapture?.(e.pointerId);
+}
+function editorPointerMove(e){
+  if(!editorMode||!editorDragging||!editorSelected) return;
+  const p=editorWorldPoint(e); if(!p) return;
+  const targetX=Math.max(stage.bounds.minX+12,Math.min(stage.bounds.maxX-12,p.x+editorDragOffset.x));
+  const targetZ=Math.max(stage.bounds.minZ+12,Math.min(stage.bounds.maxZ-12,p.z+editorDragOffset.z));
+  editorSelected.root.position.x=targetX; editorSelected.root.position.z=targetZ;
+  if(editorHelper) editorHelper.box.setFromObject(editorSelected.root);
+  document.getElementById('editorInfo').textContent=`選択中: ${editorSelected.label} / X ${Math.round(targetX)} / Z ${Math.round(targetZ)} / 向き ${Math.round(THREE.MathUtils.radToDeg(editorSelected.root.rotation.y))}°`;
+}
+function editorPointerUp(){editorDragging=false;editorList();}
+
+function editorAddFromPalette(type){
+  if(!editorMode) return;
+  const u=editorCreateUnit(type,0,0,0);
+  if(u) editorSelect(u);
+  document.getElementById('editorInfo').textContent=`${u.label}を追加しました。ドラッグで移動、回転ボタンで向きを変更できます。`;
+}
+
+canvas.addEventListener('pointerdown',editorPointerDown);
+canvas.addEventListener('pointermove',editorPointerMove);
+canvas.addEventListener('pointerup',editorPointerUp);
+canvas.addEventListener('pointercancel',editorPointerUp);
+document.getElementById('editorMinimize').addEventListener('click',()=>{
+  const panel=document.getElementById('editorPanel'); const minimized=panel.classList.toggle('minimized');
+  document.getElementById('editorMinimize').textContent=minimized?'＋':'−';
+  document.getElementById('editorMinimize').title=minimized?'編集パネルを展開':'編集パネルを最小化';
+});
+document.getElementById('editorBtn').addEventListener('click',()=>{if(editorMode)exitEditor();else enterEditor();});
+document.getElementById('editorExit').addEventListener('click',exitEditor);
+document.getElementById('editorSave').addEventListener('click',editorSave);
+document.getElementById('editorExport').addEventListener('click',editorExportText);
+document.getElementById('editorCopy').addEventListener('click',editorCopyText);
+document.getElementById('editorReset').addEventListener('click',editorReset);
+document.getElementById('editorDelete').addEventListener('click',editorDeleteSelected);
+document.getElementById('editorRotateL').addEventListener('click',()=>editorRotate(-15));
+document.getElementById('editorRotateR').addEventListener('click',()=>editorRotate(15));
+EDITOR_CATALOG.forEach(([type,label])=>{
+  const b=document.createElement('button'); b.textContent='＋ '+label; b.addEventListener('click',()=>editorAddFromPalette(type));
+  document.getElementById('editorPalette').appendChild(b);
+});
+
+// ================= Fake bloom (cheap glow) =================
+const bloomCanvas = document.getElementById('bloomCanvas');
+const bloomCtx = bloomCanvas.getContext('2d');
+let bloomOK = true, bloomFrame = 0;
+function drawBloom(){
+  if(!bloomOK) return;
+  bloomFrame++;
+  if(bloomFrame % 2 !== 0) return;
+  try{
+    bloomCtx.clearRect(0,0,bloomCanvas.width,bloomCanvas.height);
+    bloomCtx.drawImage(canvas, 0,0,bloomCanvas.width,bloomCanvas.height);
+  }catch(e){ bloomOK = false; }
+}
+
+// ================= Cake score FX =================
+const cakeFxCanvas = document.getElementById('cakeFxCanvas');
+const cakeFxCtx = cakeFxCanvas.getContext('2d');
+function resizeCakeFxCanvas(){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cakeFxCanvas.width = Math.floor(innerWidth*dpr);
+  cakeFxCanvas.height = Math.floor(innerHeight*dpr);
+  cakeFxCtx.setTransform(dpr,0,0,dpr,0,0);
+}
+function cakeWorldScreen(){
+  const v = new THREE.Vector3(stage.cake.x, 92, stage.cake.z);
+  v.project(camera);
+  return {x:(v.x*0.5+0.5)*innerWidth, y:(-v.y*0.5+0.5)*innerHeight};
+}
+function spawnCakeScoreFX(points, combo, feast){
+  const p=cakeWorldScreen();
+  const burst={x:p.x,y:p.y-12,age:0,life:1.15,points,combo,feast,parts:[]};
+  const count=feast?42:26;
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2, sp=(feast?150:105)*(0.45+Math.random()*0.9);
+    burst.parts.push({x:0,y:0,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-(feast?45:20),size:2+Math.random()*5,rot:Math.random()*6.28,spin:(Math.random()-.5)*10,kind:i%3});
+  }
+  cakeFxBursts.push(burst);
+}
+function drawCakeScoreFX(dt){
+  if(!cakeFxBursts.length) return;
+  cakeFxCtx.clearRect(0,0,innerWidth,innerHeight);
+  cakeFxBursts.forEach(b=>{
+    b.age+=dt;
+    const t=b.age/b.life, a=Math.max(0,1-t);
+    b.parts.forEach(pt=>{
+      pt.x+=pt.vx*dt; pt.y+=pt.vy*dt; pt.vy+=210*dt; pt.rot+=pt.spin*dt;
+      cakeFxCtx.save(); cakeFxCtx.globalAlpha=a; cakeFxCtx.translate(b.x+pt.x,b.y+pt.y); cakeFxCtx.rotate(pt.rot);
+      if(pt.kind===0){ cakeFxCtx.fillStyle='#ffe45e'; cakeFxCtx.fillRect(-pt.size/2,-pt.size/2,pt.size,pt.size*1.8); }
+      else if(pt.kind===1){ cakeFxCtx.fillStyle='#ff8bd1'; cakeFxCtx.beginPath(); cakeFxCtx.arc(0,0,pt.size,0,Math.PI*2); cakeFxCtx.fill(); }
+      else { cakeFxCtx.fillStyle='#8ff3ff'; cakeFxCtx.beginPath(); cakeFxCtx.moveTo(0,-pt.size*1.5); cakeFxCtx.lineTo(pt.size,pt.size); cakeFxCtx.lineTo(-pt.size,pt.size); cakeFxCtx.closePath(); cakeFxCtx.fill(); }
+      cakeFxCtx.restore();
+    });
+    const pulse=Math.sin(Math.min(1,t)*Math.PI);
+    cakeFxCtx.save(); cakeFxCtx.globalAlpha=a*0.9; cakeFxCtx.strokeStyle='#fff6a8'; cakeFxCtx.lineWidth=5*(1-t)+1; cakeFxCtx.beginPath(); cakeFxCtx.arc(b.x,b.y,28+95*t,0,Math.PI*2); cakeFxCtx.stroke();
+    cakeFxCtx.globalAlpha=a*0.35; cakeFxCtx.fillStyle='#fff7cf'; cakeFxCtx.beginPath(); cakeFxCtx.arc(b.x,b.y,30+55*pulse,0,Math.PI*2); cakeFxCtx.fill(); cakeFxCtx.restore();
+    cakeFxCtx.save(); cakeFxCtx.globalAlpha=a; cakeFxCtx.textAlign='center'; cakeFxCtx.textBaseline='middle';
+    cakeFxCtx.font=`900 ${b.feast?34:28}px sans-serif`; cakeFxCtx.lineWidth=8; cakeFxCtx.strokeStyle='rgba(55,20,90,.9)'; cakeFxCtx.strokeText(`+${b.points}`,b.x,b.y-62-35*t); cakeFxCtx.fillStyle='#fff36b'; cakeFxCtx.fillText(`+${b.points}`,b.x,b.y-62-35*t);
+    cakeFxCtx.font=`900 ${b.feast?20:16}px sans-serif`; cakeFxCtx.fillStyle='#ffffff'; cakeFxCtx.strokeStyle='rgba(55,20,90,.85)'; cakeFxCtx.lineWidth=5;
+    cakeFxCtx.strokeText(b.feast?'CAKE CLEAR!!':`COMBO ×${b.combo}`,b.x,b.y-25-25*t); cakeFxCtx.fillText(b.feast?'CAKE CLEAR!!':`COMBO ×${b.combo}`,b.x,b.y-25-25*t);
+    cakeFxCtx.restore();
+  });
+  cakeFxBursts=cakeFxBursts.filter(b=>b.age<b.life);
+}
+
+// ================= Resize =================
+function onResize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  const bw = 160, bh = Math.round(bw * (h/w));
+  if(bloomCanvas.width !== bw || bloomCanvas.height !== bh){ bloomCanvas.width = bw; bloomCanvas.height = bh; }
+  resizeCakeFxCanvas();
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', ()=>setTimeout(onResize,200));
+
+// ================= Main loop =================
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now-last)/1000);
+  last = now;
+
+  if(state === 'playing'){
+    updateDad(dt);
+    updateMom(dt);
+    updateRoomba(dt);
+    // refresh the moving Roomba obstacle so jumping onto it is supported
+    if(roombaGroup){
+      const r=obstacles.find(o=>o.roomba);
+      if(r){r.minX=roomba.x-roomba.radius;r.maxX=roomba.x+roomba.radius;r.minZ=roomba.z-roomba.radius;r.maxZ=roomba.z+roomba.radius;r.topY=roomba.topY;}
+    }
+    updatePlayer(dt);
+    updateDetection(dt);
+    updateTimer(dt);
+    syncHidingSpots();
+    computeAction();
+  }
+  if(state === 'caught') updateCaughtAnimation(dt);
+  if(state !== 'menu' && state !== 'intro' && state !== 'editor'){
+    updateCamera(dt);
+  }
+  updateActionButtonLabel();
+
+  if(flashAlpha > 0){
+    // Cap the red "caught" flash so it stays translucent instead of fully
+    // blacking out the screen — the orange/red danger circle around dad
+    // should stay visible through it so you can confirm you were in range.
+    document.getElementById('flash').style.opacity = Math.min(flashAlpha, 0.45);
+    flashAlpha = Math.max(0, flashAlpha - 0.035);
+  } else {
+    document.getElementById('flash').style.opacity = 0;
+  }
+
+  updateHUD();
+  drawCakeScoreFX(dt);
+  if(stage) drawRadar();
+  renderer.render(scene, camera);
+  drawBloom();
+  requestAnimationFrame(loop);
+}
+
+// ================= PS1 Low-Poly Material Pass =================
+function applyPS1Look(){
+  scene.traverse(obj=>{
+    if(!obj.isMesh) return;
+    const m=obj.material;
+    const mats=Array.isArray(m)?m:[m];
+    mats.forEach(mat=>{
+      if(!mat) return;
+      if('flatShading' in mat) mat.flatShading=true;
+      if('roughness' in mat) mat.roughness=1;
+      if('metalness' in mat) mat.metalness=0;
+      if(mat.map){
+        mat.map.magFilter=THREE.NearestFilter;
+        mat.map.minFilter=THREE.NearestFilter;
+        mat.map.generateMipmaps=false;
+        mat.map.anisotropy=1;
+        mat.map.needsUpdate=true;
+      }
+      mat.needsUpdate=true;
+    });
+  });
+}
+
+// ================= Init =================
+onResize();
+setupStage(0);
+applyPS1Look();
+updateLivesUI();
+goMenu();
+requestAnimationFrame(loop);
+
+};
+</script>
+</body>
+</html>
